@@ -1,4 +1,3 @@
-import pytest
 import pandas as pd
 import numpy as np
 from supported_model import Rule, gen_possible_consequences
@@ -35,8 +34,6 @@ def test_gen_grounding_call():
 
 
 def test_gen_grounding_background():
-    r1 = Rule(head=("zero", [0]), body=[], variable_types=["num"], weight=None)
-    r2 = Rule(head=("succ", [0, 1]), body=[], variable_types=["num", "num"], weight=None)
     r3 = Rule(head=("target", [0, 1]), body=[("succ", [1, 0], False)], variable_types=["num", "num"], weight=None)
 
     types = pd.DataFrame([0, 1, 2, 3, 4], columns=["num"])
@@ -67,8 +64,6 @@ def test_gen_grounding_multiple_no_background():
 
 
 def test_gen_grounding_multiple_with_background():
-    r1 = Rule(head=("zero", [0]), body=[], variable_types=["num"], weight=None)
-    r2 = Rule(head=("succ", [0, 1]), body=[], variable_types=["num", "num"], weight=None)
     r3 = Rule(head=("target", [0, 1]), body=[("succ", [0, 2], False),
                                              ("succ", [2, 1], False)],
               variable_types=["num", "num", "num"], weight=None)
@@ -104,7 +99,7 @@ def test_gen_possible_consequences_simple():
 
 
 def test_gen_possible_consequences_with_bodies():
-    r2 = Rule(head=("succ", [0, 1]), body=[("succ", [1, 0], True)], variable_types=["num", "num"], weight=None)
+    r2 = Rule(head=("succ", [0, 1]), body=[("succ", [1, 0], True)], variable_types=["num", "num"], weight=0)
 
     types = pd.DataFrame([0, 1], columns=["num"])
     background_knowledge = {}
@@ -113,5 +108,5 @@ def test_gen_possible_consequences_with_bodies():
     ground_indexes, cons = gen_possible_consequences([r2])
     assert ground_indexes == {('succ', (0, 0)): 0, ('succ', (1, 1)): 3,
                               ('succ', (1, 0)): 2, ('succ', (0, 1)): 1}
-    np.testing.assert_array_equal(cons, [[(None, [0], [True])], [(None, [2], [True])],
-                                         [(None, [1], [True])], [(None, [3], [True])]])
+    np.testing.assert_array_equal(cons, [[(0, [0], [True])], [(0, [2], [True])],
+                                         [(0, [1], [True])], [(0, [3], [True])]])

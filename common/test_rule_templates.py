@@ -9,4 +9,4 @@ def test_generate_rules():
     template = Template(p, [q], {"Type1": ["X"]})
 
     actual = template.generate_rules(max_pos=1, max_neg=0, min_total=0, max_total=1)
-    assert actual == expected_rules
+    assert [a.__repr__() for a in actual] == expected_rules
