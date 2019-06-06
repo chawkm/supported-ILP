@@ -1,5 +1,5 @@
 from itertools import combinations_with_replacement, chain, product
-from supported_model import Rule
+from .supported_model import Rule
 
 
 class Predicate(object):
