@@ -5,8 +5,8 @@ import pandas as pd
 from common.supported_model import Rule, gen_possible_consequences
 from common.preprocess_rules import preprocess_rules_to_tf
 
-EPOCHS = 150
-LEARNING_RATE = 1e-2
+EPOCHS = 1050
+LEARNING_RATE = 1e-3
 LASSO = 0.01
 
 r1 = Rule(head=("zero", [0]), body=[], variable_types=["num"], weight=0)
@@ -33,7 +33,8 @@ for r in grounded_rules:
 ground_indexes, consequences = gen_possible_consequences(grounded_rules)
 
 example = {('target', (0,)): 1.0, ('target', (1,)): 0.0,
-           ('target', (2,)): 1.0, ('target', (4,)): 1.0}
+           ('target', (2,)): 1.0, ('target', (3,)): 0.0,
+           ('target', (4,)): 1.0}
 
 def gen_sparse_model_from_example(ground_is, ex):
     sorted_vals = sorted(((ground_is.get(k), v) for k, v in ex.items()), key=lambda x: x[0])
@@ -59,7 +60,7 @@ with tf.Graph().as_default():
     model_vals = tf.constant(mvs)
     ex = Example(model_shape, weight_stopped, model_indexes, model_vals)
     # print("model", ex.model)
-    lasso_loss = tf.constant(LASSO) * tf.reduce_sum(tf.abs((1 - weight_mask) * weights))
+    lasso_loss = tf.constant(LASSO) * tf.reduce_sum(tf.square((1 - weight_mask) * weights))
     loss = ex.loss(data_weights, data_bodies, data_negs) + lasso_loss
     opt = tf.train.AdamOptimizer(learning_rate=LEARNING_RATE).minimize(loss)
     # grads_and_vars = opt.compute_gradients(loss, [weights, ex.model])

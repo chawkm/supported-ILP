@@ -5,6 +5,7 @@ from tensorflow.contrib import autograph
 
 class Example(object):
     def __init__(self, shape, weights, model_indexes, model_vals):
+        self.out = None
         self.shape = shape
         self.weights = weights
         self.tf_prob_sum = None
@@ -39,40 +40,77 @@ class Example(object):
     def out_index(self, weight_indices, body, negations):
         model_vals = tf.gather_nd(self.model_, body)
         weights = tf.gather(self.weights, weight_indices)
-        # print("model_vals", model_vals)
-        # print("reduced model", tf.reduce_prod(tf.where(negations, 1 - model_vals, model_vals), axis=1))
-        # print("weights", weights)
         vals = weights * tf.reduce_prod(tf.where(negations, 1 - model_vals, model_vals), axis=1)
-        # print("prob_sum", self.reduce_val_by_prob_sum(vals))
-        # print("vals", vals)
-        return self.reduce_val_by_prob_sum(vals)
+        seg_max = tf.segment_max(vals, weight_indices)
+
+        return self.reduce_val_by_prob_sum(seg_max)
+        # return tf.reduce_max(tf.nn.dropout(vals, seed=0, rate=tf.constant(0.0)))
+        # soft_max = weights / tf.reduce_sum(weights)#tf.nn.softmax(vals)
+        # return tf.reduce_sum(soft_max * vals)
+
+    def loss_while(self, ws, bs, ns):
+        i = tf.constant(0)
+        ending_val = self.shape - 2
+        c = lambda i, arr: tf.less(i, ending_val)
+        b = lambda i, arr: (tf.add(i, 1), arr.write(i, self.out_index(ws[i], bs[i], ns[i])))
+        ta = tf.TensorArray(dtype=tf.float32, size=self.shape)
+        # ta = tf.zeros(self.shape, dtype=tf.float32)
+        _, out = tf.while_loop(c, b, [i, ta], parallel_iterations=10)
+
+        # ensure model_shape is tf constant
+        # ta = tf.TensorArray(dtype=tf.float32, size=self.shape)
+        # for each out_index - try ragged tensor
+        # for i in tf.range(self.shape - 2):
+        #     # write to output of (weights, body, negs)
+        #     ta = ta.write(i, self.out_index(ws[i], bs[i], ns[i]))
+        # # write truth and false
+        out = out.write(self.shape - 2, 1.0)
+        out = out.write(self.shape - 1, 0.0)
+        out = out.stack()
+        self.out = out
+        unweighted_loss = out - self.model_
+        weighted_loss = tf.constant(2.0) * (
+                    1 - self.trainable_model) * unweighted_loss + self.trainable_model * unweighted_loss
+        # return tf.reduce_sum(tf.abs(tf.nn.dropout(weighted_loss, seed=0, rate=tf.constant(0.0))))
+        return tf.reduce_sum(tf.square(weighted_loss))
 
     @autograph.convert()
     def loss(self, ws, bs, ns):
         # ensure model_shape is tf constant
         ta = tf.TensorArray(dtype=tf.float32, size=self.shape)
         # for each out_index - try ragged tensor
-        for i in tf.range(self.shape - 1):
+        for i in tf.range(self.shape - 2):
             # write to output of (weights, body, negs)
             ta = ta.write(i, self.out_index(ws[i], bs[i], ns[i]))
-        ta.write(self.shape - 1, 1.0)
-        # print("model", self.model)
+        # write truth and false
+        ta = ta.write(self.shape - 2, 1.0)
+        ta = ta.write(self.shape - 1, 0.0)
         out = ta.stack()
-        # print("out", out)
-        return tf.reduce_sum(tf.square(out - self.model_))
+        self.out = out
+        unweighted_loss = out - self.model_
+        weighted_loss = tf.constant(2.0) * (1 - self.trainable_model) * unweighted_loss + self.trainable_model * unweighted_loss
+        # return tf.reduce_sum(tf.abs(tf.nn.dropout(weighted_loss, seed=0, rate=tf.constant(0.0))))
+        return tf.reduce_sum(tf.square(weighted_loss))
 
     def apply_model_gradients(self, opt, model_grads):
         return opt.apply_gradients([(self.model, self.trainable_model * model_grads)])
 
     # @tf.function
-    # def reduce_val_by_max(self, val):
-    #     return tf.maximum(val)
-
     @autograph.convert()
+    def reduce_val_by_max(self, val):
+        return tf.reduce_max(val)
+
+    # @autograph.convert()
     def reduce_val_by_prob_sum(self, val):
-        out = 0.0
-        for v in val:
-            out = out + v - out * v
+        i = tf.constant(0)
+        acc = tf.constant(0.0)
+        ending_val = tf.shape(val)[0]
+        c = lambda i, acc: tf.less(i, ending_val)
+        b = lambda i, acc: (tf.add(i, 1), acc + val[i] - acc * val[i])
+        _, out = tf.while_loop(c, b, [i, acc], parallel_iterations=10)
+        # out = 0.0
+        # for v in val:
+        #     out = out + v - out * v
         return out
 
 if __name__ == '__main__':

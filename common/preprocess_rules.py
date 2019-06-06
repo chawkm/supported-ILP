@@ -10,6 +10,7 @@ def preprocess_rules_to_tf(ground_indexes, consequences):
     """
     N = len(ground_indexes)
     ground_indexes["_truth"] = N
+    ground_indexes["_false"] = N + 1
 
     data_weights = []
     data_bodies = []
@@ -31,7 +32,7 @@ def preprocess_rules_to_tf(ground_indexes, consequences):
         data_bodies.append(np.expand_dims(np.array(bodies), 2).tolist())
         data_negs.append(np.array(negs).tolist())
 
-    print(data_weights, data_bodies, data_negs)
+    # print(data_weights, data_bodies, data_negs)
     return tf.ragged.constant(data_weights, ragged_rank=1), \
            tf.ragged.constant(data_bodies, ragged_rank=1), \
            tf.ragged.constant(data_negs, ragged_rank=1)

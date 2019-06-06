@@ -27,7 +27,7 @@ class Rule(object):
 
     @staticmethod
     def _body_string(body_atom):
-        return "not " if body_atom[2] else "" + \
+        return ("not " if body_atom[2] else "") + \
                     body_atom[0] + "(" + ",".join(Rule.vars[v] for v in body_atom[1]) + ")"
 
     def gen_grounding(self, background_knowledge, types):
@@ -40,12 +40,23 @@ class Rule(object):
             return None
         for body in self.body:
             if body[2]:
-                # TODO negative body
+                # negative body dealt with afterwards
                 continue
             if body[0] in background_knowledge:
                 # join corresponding background knowledge with ground_types
                 df2 = background_knowledge[body[0]].copy()
-                df2.columns = body[1]
+                df3 = None
+                for k, body_col in enumerate(body[1]):
+                    if df3 is None:
+                        df3 = df2[[k]]
+                        df3.columns = [body_col]
+                    else:
+                        if body_col in df3.columns:
+                            df3 = df3[df3[body_col] == df2[k]]
+                        else:
+                            df3[body_col] = df2[k]
+                df2 = df3
+                # df2.columns = body[1]
                 if df is None:
                     df = df2
                 else:
@@ -80,10 +91,18 @@ class Rule(object):
                 df2.columns = [index]
                 df['tmp'] = 1
                 df2['tmp'] = 1
-                df = df.merge(df2)
+                df = df.merge(df2).drop('tmp', axis=1)
                 if "_dummy" in df.columns:
                     df = df.drop('_dummy', axis=1)
+        for body in self.body:
+            if body[2]:
+                # negative body
+                # variables should be safe so they should be part of df already
+                for index in body[1]:
+                    assert index in df.columns
+                # assert False, "Need to implement negation grounding"
 
+        # print("df", df, self.variable_types)
         self.grounding = df[list(range(len(self.variable_types)))].values
 
 
@@ -121,7 +140,12 @@ def gen_possible_consequences(rules):
                 for i in range(len(body_types)):
                     values[i] = grounding[body_types[i]]
                 ground_body = (body_index, tuple(values))
-                if ground_body not in ground_index:
+                # avoid having consequences of one's self
+                if ground_body == ground_rule:
+                    valid = False
+                    break
+                # if positive body and not a possible consequence then invalid
+                if not negated and ground_body not in ground_index:
                     valid = False
                     break
                 ground_bodies.append(ground_index[ground_body])
