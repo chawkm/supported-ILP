@@ -8,12 +8,12 @@ def test_generate_rules_all_predicates():
     predicates = [p1]
 
     ri = RuleIndex()
-    t = Template(head, predicates, ri)
+    t = Template(head, predicates, ri, max_var=2)
 
     gen_rules = t.generate_rules(max_pos=1, max_neg=1, min_total=0, max_total=2)
 
     assert {r.__repr__() for r in gen_rules} == {"target(A).",
-                                                 "target(A) :- not zero(A)."
+                                                 "target(A) :- not zero(A).",
                                                  "target(A) :- zero(A).",
                                                  "target(A) :- zero(B)."}
 
@@ -40,9 +40,12 @@ def test_generate_rules_2_different_predicates():
     predicates = [p1, p2]
 
     ri = RuleIndex()
-    t = Template(head, predicates, ri, max_var=2)
+    t = Template(head, predicates, ri, max_var=3, safe_head=True)
 
-    gen_rules = t.generate_rules(max_pos=1, max_neg=1, min_total=2, max_total=2)
+    gen_rules = t.generate_rules(max_pos=2, max_neg=0, min_total=1, max_total=2)
+
+    for r in gen_rules:
+        print(r)
 
     assert {r.__repr__() for r in gen_rules} == {"target(A,A) :- zero(A),not succ(A,A).",
                                                  "target(A,A) :- zero(B),not succ(B,B).",
@@ -61,7 +64,7 @@ def test_generate_rules_max_var_3():
     predicates = [p1, p2]
 
     ri = RuleIndex()
-    t = Template(head, predicates, ri, max_var=3)
+    t = Template(head, predicates, ri, max_var=2)
 
     gen_rules = t.generate_rules(max_pos=1, max_neg=1, min_total=2, max_total=2)
 
@@ -91,6 +94,24 @@ def test_generate_max_3_in_body():
     t = Template(head, predicates, ri, max_var=3)
 
     gen_rules = t.generate_rules(max_pos=3, max_neg=0, min_total=3, max_total=3)
+
+    for r in gen_rules:
+        print(r)
+
+
+def test_generate_symmetries():
+    target = Predicate("target", ["e"])
+    invented = Predicate("i", ["e"])
+    edge = Predicate("edge", ["e", "e"])
+    colour = Predicate("colour", ["e", "e"])
+    red = Predicate("red", ["e"])
+    green = Predicate("green", ["e"])
+
+    ri = RuleIndex()
+    target_t = Template(target, [edge, colour, red, green, invented, target], ri, max_var=2)
+    invented_t = Template(invented, [edge, colour, red, green, invented, target], ri, max_var=2)
+
+    gen_rules = target_t.generate_rules(max_pos=3, max_neg=0, min_total=1, max_total=2)
 
     for r in gen_rules:
         print(r)

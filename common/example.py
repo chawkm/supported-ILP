@@ -17,12 +17,13 @@ class Example(object):
                                     tf.random.uniform([shape], dtype=st.dtype, seed=0),
                                     tf.sparse.to_dense(st))
 
-        self.model = tf.Variable(initial_value=initial_value, constraint=lambda x: tf.clip_by_value(x, 0.0, 1.0))
+        self.model = tf.Variable(initial_value=initial_value)#, constraint=lambda x: tf.clip_by_value(x, 0.0, 1.0))
 
         # self.trainable_model = tf.ones_like(self.model)
         self.trainable_model = tf.cast(dense_mask, dtype=tf.float32)
-        self.model_ = tf.stop_gradient((1 - self.trainable_model) * self.model) + self.trainable_model * self.model
-
+        self.sig_model = tf.sigmoid(self.model)
+        self.model_ = tf.stop_gradient((1 - self.trainable_model) * self.model) + self.trainable_model * self.sig_model
+        # self.model_ = tf.Variable(initial_value=self.model_init, trainable=False)
     # @property
     # def model(self):
     #     if self._model is None:
@@ -57,22 +58,16 @@ class Example(object):
         # ta = tf.zeros(self.shape, dtype=tf.float32)
         _, out = tf.while_loop(c, b, [i, ta], parallel_iterations=10)
 
-        # ensure model_shape is tf constant
-        # ta = tf.TensorArray(dtype=tf.float32, size=self.shape)
-        # for each out_index - try ragged tensor
-        # for i in tf.range(self.shape - 2):
-        #     # write to output of (weights, body, negs)
-        #     ta = ta.write(i, self.out_index(ws[i], bs[i], ns[i]))
-        # # write truth and false
+        # write truth and false
         out = out.write(self.shape - 2, 1.0)
         out = out.write(self.shape - 1, 0.0)
         out = out.stack()
         self.out = out
         unweighted_loss = out - self.model_
-        weighted_loss = tf.constant(2.0) * (
+        weighted_loss = tf.constant(1.0) * (
                     1 - self.trainable_model) * unweighted_loss + self.trainable_model * unweighted_loss
         # return tf.reduce_sum(tf.abs(tf.nn.dropout(weighted_loss, seed=0, rate=tf.constant(0.0))))
-        return tf.reduce_sum(tf.square(weighted_loss))
+        return tf.reduce_sum(tf.abs(weighted_loss))
 
     @autograph.convert()
     def loss(self, ws, bs, ns):
@@ -87,10 +82,11 @@ class Example(object):
         ta = ta.write(self.shape - 1, 0.0)
         out = ta.stack()
         self.out = out
+        print(out)
         unweighted_loss = out - self.model_
         weighted_loss = tf.constant(2.0) * (1 - self.trainable_model) * unweighted_loss + self.trainable_model * unweighted_loss
         # return tf.reduce_sum(tf.abs(tf.nn.dropout(weighted_loss, seed=0, rate=tf.constant(0.0))))
-        return tf.reduce_sum(tf.square(weighted_loss))
+        return tf.reduce_sum(tf.abs(weighted_loss))
 
     def apply_model_gradients(self, opt, model_grads):
         return opt.apply_gradients([(self.model, self.trainable_model * model_grads)])

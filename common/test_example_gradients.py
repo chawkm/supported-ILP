@@ -26,10 +26,10 @@ def test_one_rule_body():
 def test_loss():
     with tf.Graph().as_default():
         weights = tf.Variable([0.5], dtype=tf.float32, name='weights')
-        model_shape = 1#tf.constant([1])
+        model_shape = 3#tf.constant([1])
 
-        model_indexes = tf.constant([[0]], dtype=tf.int64)
-        model_vals = tf.constant([1.0])
+        model_indexes = tf.constant([[0], [1], [2]], dtype=tf.int64)
+        model_vals = tf.constant([1.0, 1.0, 0.0])
         ex = Example(model_shape, weights, model_indexes, model_vals)
 
         data_weight_indices = tf.constant([[0]])
@@ -39,16 +39,16 @@ def test_loss():
         with tf.Session() as sess:
             init = tf.global_variables_initializer()
             sess.run(init)
-            assert sess.run(ex.loss(data_weight_indices, data_bodies, data_negs)) == 0.25
+            assert sess.run(ex.loss(data_weight_indices, data_bodies, data_negs)) == 0.5 * 2
 
 
 def test_gradient_single_loss():
     with tf.Graph().as_default():
         weights = tf.Variable([0.5], dtype=tf.float32, name='weights')
-        model_shape = 1
+        model_shape = 3
 
-        model_indexes = tf.constant([[0]], dtype=tf.int64)
-        model_vals = tf.constant([1.0])
+        model_indexes = tf.constant([[0], [1], [2]], dtype=tf.int64)
+        model_vals = tf.constant([1.0, 1.0, 0.0])
         ex = Example(model_shape, weights, model_indexes, model_vals)
 
         data_weight_indices = tf.constant([[0]])

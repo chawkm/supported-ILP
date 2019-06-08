@@ -17,6 +17,7 @@ def preprocess_rules_to_tf(ground_indexes, consequences):
     data_negs = []
 
     max_rule_len = max(len(body[1]) for cons in consequences for body in cons)
+    max_rule_len = max(max_rule_len, 1)
 
     for cons in consequences:
         unzipped_cons = zip(*cons)

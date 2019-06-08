@@ -14,10 +14,10 @@ import time
 
 EPOCHS = 350
 LEARNING_RATE_START = 1e-1
-LASSO_MODEL = 0.3
+LASSO_MODEL = 0.1
 LASSO_WEIGHTS = 1.0
-BODY_WEIGHT = 3.5
-VAR_WEIGHT = 3.5
+BODY_WEIGHT = 0.5
+VAR_WEIGHT = 0.5
 
 target = Predicate("target", ["num"])
 zero = Predicate("zero", ["num"])
@@ -26,25 +26,25 @@ invented = Predicate("i", ["num"])
 false = Predicate("_false", ["num"])
 
 ri = RuleIndex()
-target_t = Template(target, [zero, succ, invented, target], ri, max_var=3)
-invented_t = Template(invented, [zero, succ, invented, target], ri, max_var=3)
+target_t = Template(target, [zero, succ, invented, target], ri, max_var=2)
+invented_t = Template(invented, [zero, succ, invented, target], ri, max_var=2)
 
 grounded_rules = []
 for template in [target_t, invented_t]:
-    grounded_rules.extend(template.generate_rules(max_pos=3, max_neg=0, min_total=1, max_total=3))
+    grounded_rules.extend(template.generate_rules(max_pos=3, max_neg=1, min_total=1, max_total=2))
 
 # for r in grounded_rules:
 #     print(r)
 
 r1 = Rule(head=("zero", [0]), body=[], variable_types=["num"], weight=ri.get_and_inc())
 r2 = Rule(head=("succ", [0, 1]), body=[], variable_types=["num", "num"], weight=ri.get_and_inc())
-r3 = Rule(head=("_false", [0]), body=[("target", [0], False), ("i", [0], False)], variable_types=["num"],
-          weight=ri.get_and_inc())
-r4 = Rule(head=("_false", [0]), body=[("target", [0], True), ("i", [0], True)], variable_types=["num"],
-          weight=ri.get_and_inc())
-grounded_rules.extend([r1, r2, r3, r4])
+# r3 = Rule(head=("_false", [0]), body=[("target", [0], False), ("i", [0], False)], variable_types=["num"],
+#           weight=ri.get_and_inc())
+# r4 = Rule(head=("_false", [0]), body=[("target", [0], True), ("i", [0], True)], variable_types=["num"],
+#           weight=ri.get_and_inc())
+grounded_rules.extend([r1, r2])
 
-types = {"num": pd.DataFrame([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], columns=["num"])}
+types = pd.DataFrame([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], columns=["num"])
 background_knowledge = {
     "zero": pd.DataFrame([0]),
     "succ": pd.DataFrame([(1, 0), (2, 1), (3, 2), (4, 3), (5, 4), (6, 5), (7, 6), (8, 7), (9, 8)])
@@ -54,10 +54,9 @@ ground_start_time = time.clock()
 
 print("grounding")
 for r in grounded_rules:
-    # print("b", r)
     r.gen_grounding(background_knowledge, types)
     if r.grounding.size > 0:
-        print("a", r)
+        print(r)
 
 ground_end_time = time.clock()
 print('grounding time', ground_end_time - ground_start_time)
@@ -162,9 +161,10 @@ with tf.Graph().as_default():
     data_weights, data_bodies, data_negs = preprocess_rules_to_tf(ground_indexes, consequences)
     # print("ground_indices", ground_indexes)
     # weight_mask = tf.constant([1.0, 1.0, 0.0, 0.0, 0.0])
-    weight_mask = tf.sparse.to_dense(tf.sparse.SparseTensor(indices=[[len(grounded_rules) - 2], [len(grounded_rules) - 1]],
-                                                                     # [len(grounded_rules) - 2], [len(grounded_rules) - 1]],
-                                                            values=[1.0, 1.0], dense_shape=[len(grounded_rules)]))
+    # weight_mask = tf.sparse.to_dense(tf.sparse.SparseTensor(indices=[[len(grounded_rules) - 2], [len(grounded_rules) - 1]],
+    #                                                                  # [len(grounded_rules) - 2], [len(grounded_rules) - 1]],
+    #                                                         values=[1.0, 1.0], dense_shape=[len(grounded_rules)]))
+    weight_mask = tf.zeros([len(grounded_rules)])
     weight_initial_value = weight_mask * tf.ones([len(grounded_rules)]) + \
                            (1 - weight_mask) * tf.zeros([len(grounded_rules)])# * 0.5 # tf.random.uniform([len(grounded_rules)], 0.45, 0.55, seed=0) #
     weights = tf.Variable(weight_initial_value, dtype=tf.float32, name='weights')
@@ -192,7 +192,7 @@ with tf.Graph().as_default():
         for i in range(EPOCHS):
             _, l = sess.run([opt, support_loss])
             print("loss", l)
-            if l < 0.25:
+            if l < 0.05:
                 break
         out, wis, mod = sess.run([ex.out, weight_stopped, ex.model_])
 
