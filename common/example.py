@@ -182,13 +182,42 @@ class Example(object):
         # self.out = out
         return out
 
-    def softmax_ranked_loss(self, ws, bs, ns):
-        pass
+    def softmax_head_rank_loss(self, i, wi, bi, ni, ranked_model):
+        ra = tf.range(tf.shape(self.weights)[0])
+        # todo tf.reduce_max or self.softmax_reduce_prob_sum
+        prob_sum = self.softmax_reduce_prob_sum(
+            tf.map_fn(lambda j:
+                      self.softmax_head_rank_loss_weighted(i, wi, bi, ni, ranked_model, tf.math.softmax(self.weights[j])),
+                      ra, dtype=tf.float32))
+
+        return (1 - self.model_[i]) * (1 - prob_sum)
+
+    def softmax_head_rank_loss_weighted(self, i, wi, bi, ni, ranked_model, soft_weights):
+        model_vals = tf.gather_nd(self.model_, bi)
+        ranked_vals = tf.gather_nd(ranked_model, bi)
+        head_rank = ranked_model[i]
+        weights = tf.gather(soft_weights, wi)
+
+        vals = weights * tf.reduce_prod(tf.where(ni, 1.0 - model_vals, model_vals), axis=1)
+        supported_loss = 1.0 - tf.square(vals - self.model_[i])
+
+        pair_loss = tf.sigmoid((head_rank - ranked_vals - 0.5))
+        ones = tf.ones_like(ranked_vals, dtype=tf.float32)
+        rule_ranks = supported_loss * tf.reduce_prod(tf.where(ni, ones, pair_loss), axis=1)
+
+        sum_rule_ranks = tf.reduce_sum(tf.segment_max(weights * rule_ranks, wi))
+
+        return sum_rule_ranks#(1 - self.model_[i]) * (1 - sum_rule_ranks)
+
+    def softmax_ranked_loss(self, ws, bs, ns, ranked_model):
+        ra = tf.range(tf.size(self.model_) - 2)
+        return tf.reduce_sum(tf.map_fn(lambda i:
+                                       self.softmax_head_rank_loss(i, ws[i], bs[i], ns[i], ranked_model), ra, dtype=tf.float32))
 
     @autograph.convert()
     def loss_while_RL(self, ws, bs, ns):
         # for each clause compute output
-        # reduce by prob_sum outputs
+        # reduce by prob_sum outputs # todo tf.reduce_max(, axis = 0self.softmax_reduce_prob_sum
         self.out = self.softmax_reduce_prob_sum(tf.map_fn(lambda w:
                                                           self.softmax_weighted_output(w, ws, bs, ns), self.weights))
 

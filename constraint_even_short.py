@@ -10,13 +10,13 @@ from common.grounder import Grounder
 import time
 
 EPOCHS = 1400
-LEARNING_RATE_START = 1e-3
+LEARNING_RATE_START = 1e-2
 LASSO_MODEL = 0.1
 LASSO_WEIGHTS = 1.0
 BODY_WEIGHT = 0.5
 VAR_WEIGHT = 0.5
 
-types = {"num": pd.DataFrame([0,1,2,3,4,5,6,7,8,9], columns=["num"])}  # edges
+types = {"num": pd.DataFrame([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], columns=["num"])}  # edges
 
 bk = {
     "succ": pd.DataFrame([(1, 0), (2, 1), (3, 2), (4, 3), (5, 4), (6, 5), (7, 6), (8, 7), (9, 8)]),
@@ -46,10 +46,10 @@ print("template generation time ", time.clock() - t_template)
 example1_ctx = {}
 
 example1 = {('target', (0,)): 1.0, ('target', (1,)): 0.0,
-           ('target', (2,)): 1.0, ('target', (3,)): 0.0,
-           ('target', (4,)): 1.0, ('target', (5,)): 0.0,
-           ('target', (6,)): 1.0, ('target', (7,)): 0.0,
-           ('target', (8,)): 1.0, ('target', (9,)): 0.0}
+            ('target', (2,)): 1.0, ('target', (3,)): 0.0,
+            ('target', (4,)): 1.0, ('target', (5,)): 0.0,
+            ('target', (6,)): 1.0, ('target', (7,)): 0.0,
+            ('target', (8,)): 1.0, ('target', (9,)): 0.0}
 
 mis, mvs, ground_indexes, consequences = grounder.ground(example1, example1_ctx)
 
@@ -58,7 +58,7 @@ for k, v in zip(sorted(ground_indexes.items(), key=lambda x: x[1]), consequences
 
 
 def gen_rule_length_penalties(grounded_rules):
-    return [(1 + len(r.body))*BODY_WEIGHT + len(r.variable_types)*VAR_WEIGHT for r in grounded_rules]
+    return [(1 + len(r.body)) * BODY_WEIGHT + len(r.variable_types) * VAR_WEIGHT for r in grounded_rules]
 
 
 with tf.Graph().as_default():
@@ -73,13 +73,14 @@ with tf.Graph().as_default():
     N clauses
     J = len(grounder.grounded_rules) possible choices for each clause
     Need to add 'empty' clause
-    
+
     weights = N x J
-    
+
     no weights stopped_gradient
     """
     N_Clauses = 3
-    weight_initial_value = tf.random.uniform([N_Clauses, len(grounder.grounded_rules)], seed=0) #tf.ones([len(grounder.grounded_rules)]) * -1.0
+    weight_initial_value = tf.random.uniform([N_Clauses, len(grounder.grounded_rules)],
+                                             seed=0)  # tf.ones([len(grounder.grounded_rules)]) * -1.0
 
     weights = tf.Variable(weight_initial_value, dtype=tf.float32, name='weights')
     G_len = len(ground_indexes)
@@ -89,7 +90,7 @@ with tf.Graph().as_default():
     ranked_model = tf.stop_gradient(ranked_mask * ranked_model_) + (1 - ranked_mask) * ranked_model_
 
     # sig_weights = tf.sigmoid(weights)
-    weight_stopped = weights#sig_weights
+    weight_stopped = weights  # sig_weights
 
     # model shape includes truth and negative values
     print("length of ground indexes", len(ground_indexes))
@@ -101,9 +102,10 @@ with tf.Graph().as_default():
     # lasso_model = tf.constant(LASSO_MODEL) * tf.reduce_mean(tf.abs(ex.trainable_model * ex.sig_model))
     # lasso_loss = tf.constant(LASSO_WEIGHTS) * tf.reduce_mean(tf.abs(sig_weights * body_var_weights))
     support_loss = ex.loss_while_RL(data_weights, data_bodies, data_negs)
-    loss = support_loss #+ lasso_loss + lasso_model
-    ranked_loss = ex.softmax_ranked_loss(data_weights, data_bodies, data_negs, ranked_model)
-    opt = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss + tf.math.pow(ranked_loss, 0.8), global_step=global_step)
+    loss = support_loss  # + lasso_loss + lasso_model
+    # ranked_loss = ex.softmax_ranked_loss(data_weights, data_bodies, data_negs, ranked_model)
+    opt = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss,
+                                                                       global_step=global_step)
 
     with tf.Session() as sess:
         init = tf.global_variables_initializer()
@@ -111,8 +113,8 @@ with tf.Graph().as_default():
 
         print("before", sess.run(weight_stopped))
         for i in range(EPOCHS):
-            _, l, rl = sess.run([opt, support_loss, ranked_loss])#, weight_stopped, ex.model_, ex.out]), ex.weights
-            print("loss", l, rl)
+            _, l = sess.run([opt, support_loss])  # , weight_stopped, ex.model_, ex.out]), ex.weights
+            print("loss", l)
             if l < 0.20:
                 break
         out, wis, mod, rm = sess.run([ex.out, weight_stopped, ex.model_, ranked_model])
@@ -121,6 +123,7 @@ with tf.Graph().as_default():
 def sort_grounded_rules(grounded_rules, rule_weights):
     return sorted(zip(rule_weights, grounded_rules), reverse=True)
 
+
 for (k, i), m, o in zip(sorted(ground_indexes.items(), key=lambda x: x[1]), mod, out):
     print(i, k, m, o)
 
@@ -128,7 +131,3 @@ for i in range(N_Clauses):
     print("clause " + str(i))
     for w, r in sort_grounded_rules(grounder.grounded_rules, wis[i])[:10]:
         print(w, r)
-
-print("ranks")
-for k, (v, i) in sorted(zip(rm, sorted(ground_indexes.items(), key=lambda x: x[1])), key=lambda x: x[0]):
-    print(k, v)
