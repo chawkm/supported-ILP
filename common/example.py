@@ -130,25 +130,6 @@ class Example(object):
         # return tf.reduce_sum(tf.abs(tf.nn.dropout(weighted_loss, seed=0, rate=tf.constant(0.0))))
         return tf.reduce_sum(tf.abs(weighted_loss))
 
-    # @autograph.convert()
-    # def loss(self, ws, bs, ns):
-    #     # ensure model_shape is tf constant
-    #     ta = tf.TensorArray(dtype=tf.float32, size=self.shape)
-    #     # for each out_index - try ragged tensor
-    #     for i in tf.range(self.shape - 2):
-    #         # write to output of (weights, body, negs)
-    #         ta = ta.write(i, self.out_index(ws[i], bs[i], ns[i]))
-    #     # write truth and false
-    #     ta = ta.write(self.shape - 2, 1.0)
-    #     ta = ta.write(self.shape - 1, 0.0)
-    #     out = ta.stack()
-    #     self.out = out
-    #     print(out)
-    #     unweighted_loss = out - self.model_
-    #     weighted_loss = tf.constant(2.0) * (1 - self.trainable_model) * unweighted_loss + self.trainable_model * unweighted_loss
-    #     # return tf.reduce_sum(tf.abs(tf.nn.dropout(weighted_loss, seed=0, rate=tf.constant(0.0))))
-    #     return tf.reduce_sum(tf.square(weighted_loss))
-
     def apply_model_gradients(self, opt, model_grads):
         return opt.apply_gradients([(self.model, self.trainable_model * model_grads)])
 
@@ -169,6 +150,64 @@ class Example(object):
         # for v in val:
         #     out = out + v - out * v
         return out
+
+    @autograph.convert()
+    def softmax_out_index(self, weights, weight_indices, body, negations):
+        model_vals = tf.gather_nd(self.model_, body)
+        weights = tf.gather(weights, weight_indices)
+        vals = weights * tf.reduce_prod(tf.where(negations, 1 - model_vals, model_vals), axis=1)
+        seg_max = tf.segment_max(vals, weight_indices)
+        # seg_max = tf.nn.dropout(seg_max, seed=0, rate=0.9)
+        # m = tf.reduce_max(vals)
+        # return self.prob_sum_loss_vec(vals, m)
+        return tf.reduce_sum(seg_max)
+        # return self.reduce_val_by_prob_sum(
+        #     tf.math.top_k(seg_max, tf.minimum(40, tf.size(seg_max)), sorted=False).values)
+        #
+
+    @autograph.convert()
+    def softmax_weighted_output(self, weights, ws, bs, ns):
+        soft_max_weights = tf.math.softmax(weights)
+        i = tf.constant(0)
+        ending_val = self.shape - 2
+        c = lambda i, arr: tf.less(i, ending_val)
+        b = lambda i, arr: (tf.add(i, 1), arr.write(i, self.softmax_out_index(soft_max_weights, ws[i], bs[i], ns[i])))
+        ta = tf.TensorArray(dtype=tf.float32, size=self.shape)
+        # ta = tf.zeros(self.shape, dtype=tf.float32)
+        _, out = tf.while_loop(c, b, [i, ta])#, parallel_iterations=10)
+
+        out = out.write(self.shape - 2, 1.0)
+        out = out.write(self.shape - 1, 0.0)
+        out = out.stack()
+        # self.out = out
+        return out
+
+    def softmax_ranked_loss(self, ws, bs, ns):
+        pass
+
+    @autograph.convert()
+    def loss_while_RL(self, ws, bs, ns):
+        # for each clause compute output
+        # reduce by prob_sum outputs
+        self.out = self.softmax_reduce_prob_sum(tf.map_fn(lambda w:
+                                                          self.softmax_weighted_output(w, ws, bs, ns), self.weights))
+
+        # supported loss
+        unweighted_loss = self.out - self.model_
+        weighted_loss = tf.constant(1.0) * (1 - self.trainable_model) * \
+                        unweighted_loss + self.trainable_model * unweighted_loss
+        # return tf.reduce_sum(tf.abs(tf.nn.dropout(weighted_loss, seed=0, rate=tf.constant(0.0))))
+        return tf.reduce_sum(tf.square(weighted_loss))
+
+    def softmax_reduce_prob_sum(self, vals):
+        i = tf.constant(0)
+        acc = tf.zeros_like(vals[0], dtype=tf.float32)
+        ending_val = tf.shape(vals)[0]
+        c = lambda i, acc: tf.less(i, ending_val)
+        b = lambda i, acc: (tf.add(i, 1), acc + vals[i] - acc * vals[i])
+        _, out = tf.while_loop(c, b, [i, acc])#, parallel_iterations=10)
+        return out
+
 
 if __name__ == '__main__':
     with tf.Graph().as_default():
