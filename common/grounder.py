@@ -2,7 +2,14 @@ import pandas as pd
 from rule_templates import Template, RuleIndex, Predicate
 from supported_model import gen_possible_consequences
 from preprocess_rules import preprocess_rules_to_tf
+from itertools import chain
+from multiprocessing import Pool
 import time
+
+
+def gen_rule_grounding(x):
+    bk, types, example_ctx, r = x
+    return r.gen_grounding(bk, types, example_ctx)
 
 
 class Grounder(object):
@@ -12,17 +19,21 @@ class Grounder(object):
         self.grounded_rules = []
 
     def ground(self, example, example_ctx):
-        ground_start_time = time.clock()
+        ground_start_time = time.time()
 
         # print("background before", self.bk)
         print("grounding")
-        for r in self.grounded_rules:
+
+        p = Pool(5)
+        groundings = p.map(gen_rule_grounding, [(self.bk, self.types, example_ctx, r) for r in self.grounded_rules])
+
+        for i, r in enumerate(self.grounded_rules):
             # print(r)
-            r.grounding = None
-            r.gen_grounding(self.bk, self.types, example_ctx)
+            r.grounding = groundings[i]
+            # r.gen_grounding(self.bk, self.types, example_ctx)
             # print(r.grounding)
 
-        ground_end_time = time.clock()
+        ground_end_time = time.time()
 
         print('grounding time', ground_end_time - ground_start_time)
 
@@ -37,7 +48,7 @@ class Grounder(object):
         consequences = [sorted(cons, key=lambda x: x[0]) for cons in consequences]
         print("rules with context", len(self.grounded_rules))
 
-        print('consequence time', time.clock() - ground_end_time)
+        print('consequence time', time.time() - ground_end_time)
 
         mis, mvs = gen_sparse_model_from_example(ground_indexes, example)
 
@@ -54,7 +65,7 @@ class Grounder(object):
         new_index_map = dict()
         old_index_map = dict()
 
-        for cons in consequences:
+        for cons in chain(*consequences):
             for i, elem in enumerate(cons):
                 r, a, b = elem
                 if r not in new_index_map:
@@ -63,10 +74,10 @@ class Grounder(object):
                     counter += 1
                 cons[i] = (new_index_map[r], a, b)
 
-        for k in sorted(old_index_map):
+        for k in range(counter):#sorted(old_index_map):
             non_empty_grounded_rules.append(grounded_rules[old_index_map[k]])
 
-        return non_empty_grounded_rules
+        return non_empty_grounded_rules, new_index_map
 
 
     def add_rule(self, rule):

@@ -113,6 +113,7 @@ class Rule(object):
 
         # print("df", df, self.variable_types)
         self.grounding = df[list(range(len(self.variable_types)))].values
+        return self.grounding
 
 
 def gen_possible_consequences(rules, background_knowledge, example_context={}):

@@ -36,6 +36,58 @@ class Example(object):
     # def set_model_trainable_variables(self, trainable_variables):
     #     self.trainable_model = trainable_variables
 
+    def ranked_rule_loss(self, i, ranked_model, weights, wi, bi, ni):
+        model_vals = tf.gather_nd(self.model_, bi)
+        ranked_vals = tf.gather_nd(ranked_model, bi)
+        weights = tf.gather(weights, wi)
+        head_rank = ranked_model[i]
+
+        vals = weights * tf.reduce_prod(tf.where(ni, 1.0 - model_vals, model_vals), axis=1)
+        supported_loss = 1.0 - tf.abs(vals - self.model_[i])
+
+        pair_loss = tf.sigmoid(0.05*(head_rank - ranked_vals))#tf.log(1.0 + tf.exp(-(ranked_vals - head_rank)))
+        ones = tf.ones_like(ranked_vals, dtype=tf.float32)
+        # todo - consider reduce_mean (keep within 0,1)
+
+        rule_ranks = supported_loss * tf.reduce_prod(tf.where(ni, ones, pair_loss), axis=1)
+        prob_sum_rule_ranks = self.reduce_val_by_prob_sum(tf.math.top_k(rule_ranks, tf.minimum(1, tf.size(rule_ranks)), sorted=False).values)
+        rank_loss = self.model_[i] * (1 - prob_sum_rule_ranks)
+
+        # prob_sum = tf.reduce_prod(supported_loss + rank_loss - supported_loss * rank_loss)
+
+        return rank_loss
+
+
+    def ranked_loss(self, ranked_model, weights, wis, bs, ns):
+        head_indices = tf.range(0, tf.size(ranked_model) - 2)
+        #tf.reduce_sum(
+
+        losses = tf.reduce_sum(tf.map_fn(lambda i: self.ranked_rule_loss(i, ranked_model, weights, wis[i], bs[i], ns[i]),
+                      head_indices, dtype=tf.float32))  # parallel iterations = 10
+
+        return losses
+
+    @staticmethod
+    def pairwise_loss(i, ranked_model, weights, wi, bi, ni):
+        ranked_vals = tf.gather_nd(ranked_model, bi)
+        weights = tf.gather(weights, wi)
+        head_rank = ranked_model[i]
+
+        pair_loss = tf.log(1.0 + tf.exp(-(ranked_vals - head_rank)))
+        zeros = tf.zeros_like(ranked_vals, dtype=tf.float32)
+        vals = weights * tf.reduce_sum(tf.where(ni, zeros, pair_loss), axis=1)
+        return tf.reduce_sum(vals)
+
+    # @autograph.convert()
+    @staticmethod
+    def pairwise_losses(ranked_model, weights, wis, bs, ns):
+        head_indices = tf.range(0, tf.size(ranked_model) - 2)
+
+        losses = tf.reduce_sum(tf.map_fn(lambda i: Example.pairwise_loss(i, ranked_model, weights, wis[i], bs[i], ns[i]),
+                                         head_indices, dtype=tf.float32)) #parallel iterations = 10
+
+        return losses
+
     # @tf.function
     @autograph.convert()
     def out_index(self, weight_indices, body, negations):
@@ -43,12 +95,21 @@ class Example(object):
         weights = tf.gather(self.weights, weight_indices)
         vals = weights * tf.reduce_prod(tf.where(negations, 1 - model_vals, model_vals), axis=1)
         seg_max = tf.segment_max(vals, weight_indices)
+        # seg_max = tf.nn.dropout(seg_max, seed=0, rate=0.9)
+        # m = tf.reduce_max(vals)
+        # return self.prob_sum_loss_vec(vals, m)
 
-        return self.reduce_val_by_prob_sum(seg_max)
+        return self.reduce_val_by_prob_sum(tf.math.top_k(seg_max, tf.minimum(40, tf.size(seg_max)), sorted=False).values)
+        # return self.reduce_val_by_prob_sum(tf.nn.dropout(seg_max, seed=0, rate=tf.constant(0.4)))
         # return tf.reduce_max(tf.nn.dropout(vals, seed=0, rate=tf.constant(0.0)))
         # soft_max = weights / tf.reduce_sum(weights)#tf.nn.softmax(vals)
         # return tf.reduce_sum(soft_max * vals)
 
+    # @autograph.convert()
+    def prob_sum_loss_vec(self, vec, m):
+        return tf.reduce_mean(vec + m - vec * m)
+
+    @autograph.convert()
     def loss_while(self, ws, bs, ns):
         i = tf.constant(0)
         ending_val = self.shape - 2
@@ -69,24 +130,24 @@ class Example(object):
         # return tf.reduce_sum(tf.abs(tf.nn.dropout(weighted_loss, seed=0, rate=tf.constant(0.0))))
         return tf.reduce_sum(tf.abs(weighted_loss))
 
-    @autograph.convert()
-    def loss(self, ws, bs, ns):
-        # ensure model_shape is tf constant
-        ta = tf.TensorArray(dtype=tf.float32, size=self.shape)
-        # for each out_index - try ragged tensor
-        for i in tf.range(self.shape - 2):
-            # write to output of (weights, body, negs)
-            ta = ta.write(i, self.out_index(ws[i], bs[i], ns[i]))
-        # write truth and false
-        ta = ta.write(self.shape - 2, 1.0)
-        ta = ta.write(self.shape - 1, 0.0)
-        out = ta.stack()
-        self.out = out
-        print(out)
-        unweighted_loss = out - self.model_
-        weighted_loss = tf.constant(2.0) * (1 - self.trainable_model) * unweighted_loss + self.trainable_model * unweighted_loss
-        # return tf.reduce_sum(tf.abs(tf.nn.dropout(weighted_loss, seed=0, rate=tf.constant(0.0))))
-        return tf.reduce_sum(tf.abs(weighted_loss))
+    # @autograph.convert()
+    # def loss(self, ws, bs, ns):
+    #     # ensure model_shape is tf constant
+    #     ta = tf.TensorArray(dtype=tf.float32, size=self.shape)
+    #     # for each out_index - try ragged tensor
+    #     for i in tf.range(self.shape - 2):
+    #         # write to output of (weights, body, negs)
+    #         ta = ta.write(i, self.out_index(ws[i], bs[i], ns[i]))
+    #     # write truth and false
+    #     ta = ta.write(self.shape - 2, 1.0)
+    #     ta = ta.write(self.shape - 1, 0.0)
+    #     out = ta.stack()
+    #     self.out = out
+    #     print(out)
+    #     unweighted_loss = out - self.model_
+    #     weighted_loss = tf.constant(2.0) * (1 - self.trainable_model) * unweighted_loss + self.trainable_model * unweighted_loss
+    #     # return tf.reduce_sum(tf.abs(tf.nn.dropout(weighted_loss, seed=0, rate=tf.constant(0.0))))
+    #     return tf.reduce_sum(tf.square(weighted_loss))
 
     def apply_model_gradients(self, opt, model_grads):
         return opt.apply_gradients([(self.model, self.trainable_model * model_grads)])
