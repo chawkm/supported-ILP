@@ -23,12 +23,13 @@ class RuleIndex(object):
 
 
 class Template(object):
-    def __init__(self, head, predicates, rule_index, max_var=4, safe_head=False):
+    def __init__(self, head, predicates, rule_index, max_var=4, safe_head=False, not_identical=None):
         self.head = head
         self.predicates = predicates
         self.max_var = max_var
         self.rule_index = rule_index
         self.safe_head = safe_head
+        self.not_identical = not_identical
 
     def generate_rules(self, max_pos, max_neg, min_total, max_total):
         rules = []
@@ -92,13 +93,20 @@ class Template(object):
             head = (self.head.index, values[i: i + len(self.head.arg_types)])
             i += len(self.head.arg_types)
             body = []
+            valid_body = True
             for b in pos_b:
+                if self.not_identical is not None:
+                    # remove t :- invented
+                    if head[1] == values[i: i + len(b.arg_types)]:
+                        valid_body = False
                 body.append((b.index, values[i: i + len(b.arg_types)], False))
                 i += len(b.arg_types)
             for b in neg_b:
                 body.append((b.index, values[i: i + len(b.arg_types)], True))
                 i += len(b.arg_types)
 
+            if not valid_body:
+                continue
 
             # filter safe rules
             if self.safe(head, body, variable_types):

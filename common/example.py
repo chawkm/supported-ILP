@@ -155,8 +155,22 @@ class Example(object):
     def softmax_out_index(self, weights, weight_indices, body, negations):
         model_vals = tf.gather_nd(self.model_, body)
         weights = tf.gather(weights, weight_indices)
+        #old
         vals = weights * tf.reduce_prod(tf.where(negations, 1 - model_vals, model_vals), axis=1)
         seg_max = tf.segment_max(vals, weight_indices)
+
+        #todo new interpretation of forward chaining - ball and urn
+        # vals = tf.reduce_prod(tf.where(negations, 1 - model_vals, model_vals), axis=1)
+        # seg_weights = tf.segment_max(weights, weight_indices)
+        # i = tf.constant(0)
+        # ending_val = tf.size(weights)
+        # c = lambda i, prev, arr: tf.less(i, ending_val)
+        # b = lambda i, prev, arr: (tf.add(i, 1), arr.write(i, tf.constant([prev, i]))
+        # ta = tf.TensorArray(dtype=tf.float32, size=self.shape)
+        # # ta = tf.zeros(self.shape, dtype=tf.float32)
+        # _, out = tf.while_loop(c, b, [i, ta])  # , parallel_iterations=10)
+        # seg_max = seg_weights * (1 - tf.math.segment_prod(1 - vals, weight_indices))
+
         # seg_max = tf.nn.dropout(seg_max, seed=0, rate=0.9)
         # m = tf.reduce_max(vals)
         # return self.prob_sum_loss_vec(vals, m)
@@ -205,6 +219,7 @@ class Example(object):
         ones = tf.ones_like(ranked_vals, dtype=tf.float32)
         rule_ranks = supported_loss * tf.reduce_prod(tf.where(ni, ones, pair_loss), axis=1)
 
+        # Segment max required for existentially quantified variables
         sum_rule_ranks = tf.reduce_sum(tf.segment_max(weights * rule_ranks, wi))
 
         return sum_rule_ranks#(1 - self.model_[i]) * (1 - sum_rule_ranks)
@@ -223,10 +238,10 @@ class Example(object):
 
         # supported loss
         unweighted_loss = self.out - self.model_
-        weighted_loss = tf.constant(1.0) * (1 - self.trainable_model) * \
+        weighted_loss = tf.constant(2.0) * (1 - self.trainable_model) * \
                         unweighted_loss + self.trainable_model * unweighted_loss
         # return tf.reduce_sum(tf.abs(tf.nn.dropout(weighted_loss, seed=0, rate=tf.constant(0.0))))
-        return tf.reduce_sum(tf.square(weighted_loss))
+        return tf.reduce_sum(0.5 * (tf.abs(weighted_loss) + tf.square(weighted_loss)))
 
     def softmax_reduce_prob_sum(self, vals):
         i = tf.constant(0)

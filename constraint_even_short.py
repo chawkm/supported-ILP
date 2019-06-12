@@ -7,19 +7,22 @@ import pandas as pd
 from common.supported_model import Rule, gen_possible_consequences
 from common.preprocess_rules import preprocess_rules_to_tf
 from common.grounder import Grounder
+import numpy as np
 import time
 
+np.random.seed(1)
+
 EPOCHS = 1400
-LEARNING_RATE_START = 1e-2
-LASSO_MODEL = 0.1
+LEARNING_RATE_START = 5e-2#e-1
+LASSO_MODEL = 0.4
 LASSO_WEIGHTS = 1.0
 BODY_WEIGHT = 0.5
 VAR_WEIGHT = 0.5
 
-types = {"num": pd.DataFrame([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], columns=["num"])}  # edges
+types = {"num": pd.DataFrame(list(i for i in range(40)), columns=["num"])}  # edges
 
 bk = {
-    "succ": pd.DataFrame([(1, 0), (2, 1), (3, 2), (4, 3), (5, 4), (6, 5), (7, 6), (8, 7), (9, 8)]),
+    "succ": pd.DataFrame([(i+1, i) for i in range(40)]),
     "zero": pd.DataFrame([0])
 }
 
@@ -32,8 +35,8 @@ invented = Predicate("i", ["num"])
 false = Predicate("_false", ["num"])
 
 ri = RuleIndex()
-target_t = Template(target, [zero, succ, invented, target], ri, max_var=3)
-invented_t = Template(invented, [zero, succ, invented, target], ri, max_var=3)
+target_t = Template(target, [zero, succ, invented, target], ri, max_var=3, safe_head=True, not_identical=invented)
+invented_t = Template(invented, [zero, succ, invented, target], ri, max_var=3, safe_head=True, not_identical=target)
 
 print("template generating")
 
@@ -45,11 +48,11 @@ print("template generation time ", time.clock() - t_template)
 
 example1_ctx = {}
 
-example1 = {('target', (0,)): 1.0, ('target', (1,)): 0.0,
-            ('target', (2,)): 1.0, ('target', (3,)): 0.0,
-            ('target', (4,)): 1.0, ('target', (5,)): 0.0,
-            ('target', (6,)): 1.0, ('target', (7,)): 0.0,
-            ('target', (8,)): 1.0, ('target', (9,)): 0.0}
+example1 = {('target', (0,)): 0.0, ('target', (7,)): 0.0,
+            ('target', (20,)): 0.0, ('target', (9,)): 1.0,
+            ('target', (34,)): 0.0, ('target', (17,)): 0.0,
+            ('target', (38,)): 0.0, ('target', (33,)): 1.0,
+            ('target', (8,)): 0.0, ('target', (37,)): 1.0}
 
 mis, mvs, ground_indexes, consequences = grounder.ground(example1, example1_ctx)
 
@@ -80,14 +83,14 @@ with tf.Graph().as_default():
     """
     N_Clauses = 3
     weight_initial_value = tf.random.uniform([N_Clauses, len(grounder.grounded_rules)],
-                                             seed=0)  # tf.ones([len(grounder.grounded_rules)]) * -1.0
+                                             seed=1)  # tf.ones([len(grounder.grounded_rules)]) * -1.0
 
     weights = tf.Variable(weight_initial_value, dtype=tf.float32, name='weights')
-    G_len = len(ground_indexes)
-    ranked_mask = tf.sparse_to_dense([[G_len - 2], [G_len - 1]], [G_len], [1.0, 1.0])
-    ranked_init = (1 - ranked_mask) * tf.random.uniform([G_len], seed=0) + ranked_mask * tf.ones([G_len]) * -100.0
-    ranked_model_ = tf.Variable(ranked_init)
-    ranked_model = tf.stop_gradient(ranked_mask * ranked_model_) + (1 - ranked_mask) * ranked_model_
+    # G_len = len(ground_indexes)
+    # ranked_mask = tf.sparse_to_dense([[G_len - 2], [G_len - 1]], [G_len], [1.0, 1.0])
+    # ranked_init = (1 - ranked_mask) * tf.random.uniform([G_len], seed=0) + ranked_mask * tf.ones([G_len]) * -100.0
+    # ranked_model_ = tf.Variable(ranked_init)
+    # ranked_model = tf.stop_gradient(ranked_mask * ranked_model_) + (1 - ranked_mask) * ranked_model_
 
     # sig_weights = tf.sigmoid(weights)
     weight_stopped = weights  # sig_weights
@@ -99,25 +102,81 @@ with tf.Graph().as_default():
     model_indexes = tf.constant(mis, dtype=tf.int64, shape=[len(mis), 1])
     model_vals = tf.constant(mvs)
     ex = Example(model_shape, weight_stopped, model_indexes, model_vals)
-    # lasso_model = tf.constant(LASSO_MODEL) * tf.reduce_mean(tf.abs(ex.trainable_model * ex.sig_model))
+    lasso_model = tf.constant(LASSO_MODEL) * tf.reduce_mean(tf.abs(ex.trainable_model * ex.sig_model))
     # lasso_loss = tf.constant(LASSO_WEIGHTS) * tf.reduce_mean(tf.abs(sig_weights * body_var_weights))
     support_loss = ex.loss_while_RL(data_weights, data_bodies, data_negs)
-    loss = support_loss  # + lasso_loss + lasso_model
+    loss = support_loss + lasso_model # + lasso_loss + lasso_model
+    loss_change = loss
     # ranked_loss = ex.softmax_ranked_loss(data_weights, data_bodies, data_negs, ranked_model)
-    opt = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss,
-                                                                       global_step=global_step)
 
+    argmax = tf.argmax(weights, axis=1)
+
+    sig_weights = tf.map_fn(tf.sigmoid, weights, dtype=tf.float32)
+
+    constraints = tf.placeholder(dtype=tf.int64)  # , shape=[-1, 3])
+    # constraint_loss = tf.cond(tf.size(constraints) > 0,
+    #                           lambda: - tf.reduce_sum(tf.map_fn(lambda x: tf.log((1 - tf.reduce_max(sig_weights[:, x[0]])) *
+    #                                                              (1 - tf.reduce_max(sig_weights[:, x[1]])) *
+    #                                                              (1 - tf.reduce_max(sig_weights[:, x[2]]))),
+    #                                             constraints, dtype=tf.float32)),
+    #                           lambda: 0.0)
+    constraint_loss = tf.cond(tf.size(constraints) > 0,
+                              lambda: tf.reduce_sum(tf.map_fn(lambda x: tf.reduce_max(sig_weights[:, x[0]]) *
+                                                             tf.reduce_max(sig_weights[:, x[1]]) *
+                                                             tf.reduce_max(sig_weights[:, x[2]]),
+                                            constraints, dtype=tf.float32)),
+                              lambda: 0.0)
+
+    opt = tf.train.AdamOptimizer(learning_rate=learning_rate)\
+        .minimize(loss + constraint_loss,global_step=global_step)
+
+
+    weight_i = tf.placeholder(dtype=tf.int32)
+    weight_j = tf.placeholder(dtype=tf.int32)
+    weight_val = tf.placeholder(dtype=tf.float32)
+    assign_op = weights[weight_i, weight_j].assign(weight_val)
+
+    py_constraints = set()
+    init = tf.global_variables_initializer()
     with tf.Session() as sess:
-        init = tf.global_variables_initializer()
         sess.run(init)
 
-        print("before", sess.run(weight_stopped))
+        print("before", sess.run(weight_stopped, feed_dict={constraints: list(py_constraints)}))
         for i in range(EPOCHS):
-            _, l = sess.run([opt, support_loss])  # , weight_stopped, ex.model_, ex.out]), ex.weights
-            print("loss", l)
-            if l < 0.20:
+            _, l, cl = sess.run([opt, support_loss, constraint_loss], feed_dict={constraints: list(py_constraints)})  # , weight_stopped, ex.model_, ex.out]), ex.weights
+            print("loss", l, cl)
+            if l < 0.30:#i % 10 == 0 and
+                r1, r2, r3 = sess.run(argmax, feed_dict={constraints: list(py_constraints)})
+                print("Constrain", r1 ,r2 ,r3)
+                print(grounder.grounded_rules[r1])
+                print(grounder.grounded_rules[r2])
+                print(grounder.grounded_rules[r3])
+                #todo
+                # py_constraints.add((r1,r2,r3))
+
+                # max_rule_indices = [r1, r2, r3]
+                # ri = np.random.choice([0, 1, 2])
+                # sess.run(assign_op, feed_dict={weight_i: ri, weight_j: max_rule_indices[ri], weight_val: -1000})
+                # todo
+                # sess.run(init)
+
+                # sess.run(assign_op, feed_dict={weight_i: 0, weight_j: r1, weight_val: -1000})
+                # sess.run(assign_op, feed_dict={weight_i: 0, weight_j: r2, weight_val: 0})
+                # sess.run(assign_op, feed_dict={weight_i: 0, weight_j: r3, weight_val: 0})
+                #
+                # sess.run(assign_op, feed_dict={weight_i: 1, weight_j: r2, weight_val: -1000})
+                # sess.run(assign_op, feed_dict={weight_i: 1, weight_j: r1, weight_val: 0})
+                # sess.run(assign_op, feed_dict={weight_i: 1, weight_j: r3, weight_val: 0})
+                #
+                # sess.run(assign_op, feed_dict={weight_i: 2, weight_j: r3, weight_val: -1000})
+                # sess.run(assign_op, feed_dict={weight_i: 2, weight_j: r1, weight_val: 0})
+                # sess.run(assign_op, feed_dict={weight_i: 2, weight_j: r2, weight_val: 0})
+
                 break
-        out, wis, mod, rm = sess.run([ex.out, weight_stopped, ex.model_, ranked_model])
+
+
+
+        out, wis, mod = sess.run([ex.out, weight_stopped, ex.model_], feed_dict={constraints: list(py_constraints)})
 
 
 def sort_grounded_rules(grounded_rules, rule_weights):
