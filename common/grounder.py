@@ -24,8 +24,9 @@ class Grounder(object):
         # print("background before", self.bk)
         print("grounding")
 
-        p = Pool(5)
+        p = Pool(6)
         groundings = p.map(gen_rule_grounding, [(self.bk, self.types, example_ctx, r) for r in self.grounded_rules])
+        # groundings = [gen_rule_grounding((self.bk, self.types, example_ctx, r)) for r in self.grounded_rules]
 
         for i, r in enumerate(self.grounded_rules):
             # print(r)
@@ -38,9 +39,10 @@ class Grounder(object):
         print('grounding time', ground_end_time - ground_start_time)
 
         print("rules without context", len(self.grounded_rules))
+
         ground_indexes, consequences = gen_possible_consequences(self.grounded_rules,
                                                                  self.bk, example_ctx)
-
+        print("after", ground_indexes)
         # uncomment for single example for efficiency
         # self.grounded_rules = self.slide(consequences, self.grounded_rules)
 
@@ -86,9 +88,14 @@ class Grounder(object):
     def add_rules(self, rules):
         self.grounded_rules.extend(rules)
 
+def fail_if_hypothesis_not_possible(k, v, ground_is):
+    if k not in ground_is:
+        assert v == 0, "target not possible from given rules" + str(k) + ": " + str(v)
+        return False
+    return True
 
 def gen_sparse_model_from_example(ground_is, ex):
-    sorted_vals = sorted(((ground_is.get(k), v) for k, v in ex.items()), key=lambda x: x[0])
+    sorted_vals = sorted(((ground_is.get(k), v) for k, v in ex.items() if fail_if_hypothesis_not_possible(k, v, ground_is)), key=lambda x: x[0])
     sorted_vals.extend((ground_is.get(k), 0.0) for k in ground_is if k[0] == '_false')
     sorted_vals = sorted(sorted_vals)
 

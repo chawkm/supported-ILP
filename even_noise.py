@@ -86,7 +86,6 @@ with tf.Graph().as_default():
                                              seed=1)  # tf.ones([len(grounder.grounded_rules)]) * -1.0
 
     weights = tf.Variable(weight_initial_value, dtype=tf.float32, name='weights')
-
     # G_len = len(ground_indexes)
     # ranked_mask = tf.sparse_to_dense([[G_len - 2], [G_len - 1]], [G_len], [1.0, 1.0])
     # ranked_init = (1 - ranked_mask) * tf.random.uniform([G_len], seed=0) + ranked_mask * tf.ones([G_len]) * -100.0
@@ -108,7 +107,6 @@ with tf.Graph().as_default():
     sig_weights_sum = tf.reduce_mean(tf.map_fn(tf.sigmoid, weights, dtype=tf.float32))
     lasso_loss = tf.constant(LASSO_WEIGHTS) * sig_weights_sum
     support_loss = ex.loss_while_RL(data_weights, data_bodies, data_negs)
-    same_rule_loss = 10.0 * tf.reduce_sum(tf.reduce_prod(tf.math.top_k(tf.transpose(tf.map_fn(tf.math.softmax, weights)), k=2).values, axis=1))
     loss = support_loss + lasso_model + lasso_loss# + lasso_loss + lasso_model
     loss_change = loss
     # ranked_loss = ex.softmax_ranked_loss(data_weights, data_bodies, data_negs, ranked_model)

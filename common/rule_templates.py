@@ -3,10 +3,11 @@ from supported_model import Rule
 
 
 class Predicate(object):
-    def __init__(self, index, arg_types, negated=False):
+    def __init__(self, index, arg_types, negated=False, ts=None):
         self.index = index
         self.arg_types = arg_types
         self.negated = negated
+        self.ts = ts
 
     def __repr__(self):
         return str(self.index) + "(" + " ".join(a for a in self.arg_types) + ")"
@@ -116,6 +117,9 @@ class Template(object):
                 # print(tuple_body)
                 if (head, tuple_body) not in rule_hash:
                     rule_hash.add((head, tuple_body))
+                    if self.head.ts is not None:
+                        for en, t in enumerate(self.head.ts):
+                            body.append((t.index, (en,), False))
                     yield Rule(head, body, rule_variables, self.rule_index.get_and_inc())
 
         # return rules

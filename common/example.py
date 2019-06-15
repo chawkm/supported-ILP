@@ -241,7 +241,7 @@ class Example(object):
         weighted_loss = tf.constant(2.0) * (1 - self.trainable_model) * \
                         unweighted_loss + self.trainable_model * unweighted_loss
         # return tf.reduce_sum(tf.abs(tf.nn.dropout(weighted_loss, seed=0, rate=tf.constant(0.0))))
-        return tf.reduce_sum(0.5 * (tf.abs(weighted_loss) + tf.square(weighted_loss)))
+        return tf.reduce_sum(tf.square(weighted_loss))#0.5 * (tf.abs(weighted_loss) +
 
     def softmax_reduce_prob_sum(self, vals):
         i = tf.constant(0)

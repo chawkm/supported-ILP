@@ -170,10 +170,10 @@ def gen_possible_consequences(rules, background_knowledge, example_context={}):
                 # TODO here
                 if not negated and (ground_body not in ground_index and ground_body not in intensional
                                     and body_index not in example_context and body_index not in background_knowledge):
-                    print("invalid", rule, ground_rule, "ground_body", ground_body, "body_index", body_index)
-                    print("ground_body not in ground_index", ground_body not in ground_index)
-                    print("body_index not in intensional", body_index not in intensional, intensional)
-                    print("body_index not in example_context", body_index not in example_context, example_context)
+                    # print("invalid", rule, ground_rule, "ground_body", ground_body, "body_index", body_index)
+                    # print("ground_body not in ground_index", ground_body not in ground_index)
+                    # print("body_index not in intensional", body_index not in intensional, intensional)
+                    # print("body_index not in example_context", body_index not in example_context, example_context)
                     valid = False
                     break
                 if body_index not in background_knowledge and body_index not in example_context:

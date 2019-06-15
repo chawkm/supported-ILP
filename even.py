@@ -11,8 +11,7 @@ LASSO = 0.01
 
 r1 = Rule(head=("zero", [0]), body=[], variable_types=["num"], weight=0)
 r2 = Rule(head=("succ", [0, 1]), body=[], variable_types=["num", "num"], weight=1)
-r3 = Rule(head=("target", [0]), body=[("succ", [1, 0], False)],
-          variable_types=["num", "num"], weight=2)
+r3 = Rule(head=("target", [0]), body=[("succ", [1, 0], False)],variable_types=["num", "num"], weight=2)
 r4 = Rule(head=("target", [0]), body=[("zero", [0], False)],
           variable_types=["num"], weight=3)
 r5 = Rule(head=("target", [0]), body=[("succ", [0, 1], False), ("succ", [1, 2], False),

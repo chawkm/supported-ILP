@@ -23,11 +23,11 @@ LASSO_WEIGHTS = 1.0
 BODY_WEIGHT = 0.5
 VAR_WEIGHT = 0.5
 
-types = {"num": pd.DataFrame([0,1,2,3,4,5,6,7,8,9], columns=["num"])}  # edges
+types = {"num": pd.DataFrame([0,1,2,3,4,5,6,7,8,9,10], columns=["num"])}  # edges
 # "c": pd.DataFrame(["r", "g"], columns=["c"])} # colours
 
 bk = {
-    "succ": pd.DataFrame([(1, 0), (2, 1), (3, 2), (4, 3), (5, 4), (6, 5), (7, 6), (8, 7), (9, 8)]),
+    "succ": pd.DataFrame([(1, 0), (2, 1), (3, 2), (4, 3), (5, 4), (6, 5), (7, 6), (8, 7), (9, 8), (10, 9)]),
     "zero": pd.DataFrame([0])
 }
 
@@ -40,24 +40,24 @@ invented = Predicate("i", ["num"])
 false = Predicate("_false", ["num"])
 
 ri = RuleIndex()
-target_t = Template(target, [zero, succ, invented, target], ri, max_var=3)
-invented_t = Template(invented, [zero, succ, invented, target], ri, max_var=3)
+target_t = Template(target, [zero, succ, target], ri, max_var=3)
+# invented_t = Template(invented, [zero, succ, invented, target], ri, max_var=3)
 
-r3 = Rule(head=("_false", [0]), body=[("target", [0], False), ("i", [0], False)], variable_types=["num"],
-          weight=ri.get_and_inc())
-r4 = Rule(head=("_false", [0]), body=[("target", [0], True), ("i", [0], True)], variable_types=["num"],
-          weight=ri.get_and_inc())
+# r3 = Rule(head=("_false", [0]), body=[("target", [0], False), ("i", [0], False)], variable_types=["num"],
+#           weight=ri.get_and_inc())
+# r4 = Rule(head=("_false", [0]), body=[("target", [0], True), ("i", [0], True)], variable_types=["num"],
+#           weight=ri.get_and_inc())
 
 print("template generating")
 
 t_template = time.clock()
-for template in [target_t, invented_t]:
+for template in [target_t]:#, invented_t]:
     grounder.add_rules(template.generate_rules(max_pos=3, max_neg=0, min_total=1, max_total=2))
 
 print("template generation time ", time.clock() - t_template)
 
-grounder.add_rule(r3)
-grounder.add_rule(r4)
+# grounder.add_rule(r3)
+# grounder.add_rule(r4)
 
 example1_ctx = {}
 
@@ -65,7 +65,8 @@ example1 = {('target', (0,)): 1.0, ('target', (1,)): 0.0,
            ('target', (2,)): 1.0, ('target', (3,)): 0.0,
            ('target', (4,)): 1.0, ('target', (5,)): 0.0,
            ('target', (6,)): 1.0, ('target', (7,)): 0.0,
-           ('target', (8,)): 1.0, ('target', (9,)): 0.0}
+           ('target', (8,)): 1.0, ('target', (9,)): 0.0,
+            ('target', (10,)): 1.0}
 
 mis, mvs, ground_indexes, consequences = grounder.ground(example1, example1_ctx)
 
@@ -85,10 +86,10 @@ with tf.Graph().as_default():
     body_var_weights = tf.constant(gen_rule_length_penalties(grounder.grounded_rules), dtype=tf.float32)
     data_weights, data_bodies, data_negs = preprocess_rules_to_tf(ground_indexes, consequences)
 
-    # weight_mask = tf.zeros([len(grounder.grounded_rules)])
-    weight_mask = tf.sparse.to_dense(
-        tf.sparse.SparseTensor(indices=[[len(grounder.grounded_rules) - 2], [len(grounder.grounded_rules) - 1]],
-                               values=[1.0, 1.0], dense_shape=[len(grounder.grounded_rules)]))
+    weight_mask = tf.zeros([len(grounder.grounded_rules)])
+    # weight_mask = tf.sparse.to_dense(
+    #     tf.sparse.SparseTensor(indices=[[len(grounder.grounded_rules) - 2], [len(grounder.grounded_rules) - 1]],
+    #                            values=[1.0, 1.0], dense_shape=[len(grounder.grounded_rules)]))
     weight_initial_value = weight_mask * tf.ones([len(grounder.grounded_rules)]) * 0.8 + \
                            (1 - weight_mask) * tf.ones([len(grounder.grounded_rules)]) * -1.0 # tf.random.uniform([len(grounded_rules)], 0.45, 0.55, seed=0) #
     weights = tf.Variable(weight_initial_value, dtype=tf.float32, name='weights')
