@@ -118,6 +118,8 @@ class Template(object):
                 if (head, tuple_body) not in rule_hash:
                     rule_hash.add((head, tuple_body))
                     if self.head.ts is not None:
+                        if len(set(head[1])) < len(self.head.ts):
+                            continue
                         for en, t in enumerate(self.head.ts):
                             body.append((t.index, (en,), False))
                     yield Rule(head, body, rule_variables, self.rule_index.get_and_inc())

@@ -159,6 +159,8 @@ def gen_possible_consequences(rules, background_knowledge, example_context={}):
             for body_index, body_types, negated in rule.body:
                 values = [0] * len(body_types)
                 for i in range(len(body_types)):
+                    # print(i, body_types, grounding)
+                    # print(rule)
                     values[i] = grounding[body_types[i]]
                 ground_body = (body_index, tuple(values))
 
@@ -178,6 +180,8 @@ def gen_possible_consequences(rules, background_knowledge, example_context={}):
                     break
                 if body_index not in background_knowledge and body_index not in example_context:
                     # known intensional predicates don't need to be trained
+                    if negated and ground_body not in ground_index:
+                        continue
                     ground_bodies.append(ground_index[ground_body])
                     body_negs.append(negated)
             if valid:

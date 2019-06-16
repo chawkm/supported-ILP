@@ -46,19 +46,24 @@ invented = Predicate("empty", ["num"])
 false = Predicate("_false", ["num"])
 
 target = Predicate("target", ["num", "num"], ts=[num, zero])
+helper = Predicate("helper", ["num", "num"], ts=[num, zero])
 
 ri = RuleIndex()
-target_t = Template(target, [head, succ, target, invented], ri, max_var=3, safe_head=True)#, not_identical=invented)
-# invented_t = Template(invented, [zero, succ], ri, max_var=3, safe_head=True, not_identical=target)
+target_t = Template(target, [head, succ, invented, helper], ri, max_var=3, safe_head=True, not_identical=helper)
+invented_t = Template(helper, [head, succ, invented, helper], ri, max_var=3, safe_head=True)#, not_identical=target)
 
 print("template generating")
 
 t_template = time.clock()
-for template in [target_t]:#, invented_t]:
-    grounder.add_rules(template.generate_rules(max_pos=3, max_neg=0, min_total=1, max_total=2))
+# for template in [target_t, invented_t]:
+#     grounder.add_rules(template.generate_rules(max_pos=3, max_neg=1, min_total=1, max_total=2))
+
+grounder.add_rules(target_t.generate_rules(max_pos=3, max_neg=1, min_total=1, max_total=2))
+grounder.add_rules(invented_t.generate_rules(max_pos=3, max_neg=0, min_total=1, max_total=2))
 
 for r in grounder.grounded_rules:
     print(r)
+
 # r3 = Rule(head=("target", [0, 1]), body=[("father", [0, 2], False), ("mother", [2, 1], False)],
 #           variable_types=["num", "num", "num"], weight=ri.get_and_inc())
 #
@@ -67,12 +72,12 @@ print("template generation time ", time.clock() - t_template)
 
 example1_ctx = {}
 
-example1 = {('target', (x, y)): 1.0 for y in lists for x in y}
+example1 = {('target', (x, y)): 0.0 for y in lists for x in y}
 
 for a in lists:
     for b in nums:
         if b not in a:
-            example1[('target', (b, a))] = 0.0
+            example1[('target', (b, a))] = 1.0
 
 # print(example1)
 # assert False
@@ -107,7 +112,7 @@ with tf.Graph().as_default():
 
     no weights stopped_gradient
     """
-    N_Clauses = 2
+    N_Clauses = 3
     weight_initial_value = tf.random.uniform([N_Clauses, len(grounder.grounded_rules)],
                                              seed=1)  # tf.ones([len(grounder.grounded_rules)]) * -1.0
 
