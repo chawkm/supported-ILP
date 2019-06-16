@@ -6,9 +6,11 @@ from itertools import chain
 from multiprocessing import Pool
 import time
 
+import ray
+ray.init()
 
-def gen_rule_grounding(x):
-    bk, types, example_ctx, r = x
+@ray.remote
+def gen_rule_grounding(bk, types, example_ctx, r):
     return r.gen_grounding(bk, types, example_ctx)
 
 
@@ -24,9 +26,13 @@ class Grounder(object):
         # print("background before", self.bk)
         print("grounding")
 
-        p = Pool(6)
-        groundings = p.map(gen_rule_grounding, [(self.bk, self.types, example_ctx, r) for r in self.grounded_rules])
+        # p = Pool(6)
+        # groundings = p.map(gen_rule_grounding, [(self.bk, self.types, example_ctx, r) for r in self.grounded_rules])
         # groundings = [gen_rule_grounding((self.bk, self.types, example_ctx, r)) for r in self.grounded_rules]
+        # bkr = ray.put(self.bk)
+        # typr = ray.put(self.types)
+        # ctxr = ray.put(example_ctx)
+        groundings = ray.get([gen_rule_grounding.remote(self.bk, self.types, example_ctx, r) for r in self.grounded_rules])
 
         for i, r in enumerate(self.grounded_rules):
             # print(r)

@@ -4,6 +4,7 @@ import multiprocessing
 from common.example import Example
 from common.rule_templates import Predicate, Template, RuleIndex
 import pandas as pd
+# import modin.pandas as pd
 from common.supported_model import Rule, gen_possible_consequences
 from common.preprocess_rules import preprocess_rules_to_tf
 from common.grounder import Grounder
@@ -25,7 +26,7 @@ nums = [0,1,2,3]
 types = {"num": pd.DataFrame(nums, dtype=object)}  # edges
 
 lists = [tuple(x) for x in chain(*[permutations(nums, i) for i in range(4)])]
-print(lists)
+
 bk = {
     "num" : pd.DataFrame([n for n in nums], dtype=object),
     "list": pd.DataFrame([(l,) for l in lists], dtype=object),
@@ -33,7 +34,6 @@ bk = {
     "head": pd.DataFrame([(l[0], l) for l in lists if len(l) > 0], dtype=object),
     "empty": pd.DataFrame([[()]], dtype=object)
 }
-print(bk)
 
 grounder = Grounder(bk, types)
 
@@ -81,13 +81,9 @@ for a in lists:
 # print(example1)
 # assert False
 mis, mvs, ground_indexes, consequences = grounder.ground(example1, example1_ctx)
-#
-# print(mis)
-# print(mvs)
-# assert False
 
-for k, v in zip(sorted(ground_indexes.items(), key=lambda x: x[1]), consequences):
-    print(k, [grounder.grounded_rules[r[0]] for r in v])
+# for k, v in zip(sorted(ground_indexes.items(), key=lambda x: x[1]), consequences):
+#     print(k, [grounder.grounded_rules[r[0]] for r in v])
 
 
 def gen_rule_length_penalties(grounded_rules):

@@ -1,5 +1,6 @@
 import tensorflow as tf
 import pandas as pd
+# import modin.pandas as pd
 
 
 class Rule(object):
@@ -55,7 +56,7 @@ class Rule(object):
                 df3 = None
                 for k, body_col in enumerate(body[1]):
                     if df3 is None:
-                        df3 = df2[[k]]
+                        df3 = df2.loc[:, [k]]
                         df3.columns = [body_col]
                     else:
                         if body_col in df3.columns:
@@ -69,7 +70,9 @@ class Rule(object):
                 else:
                     df['tmp'] = 1
                     df2['tmp'] = 1
-                    df = df.merge(df2).drop('tmp', axis=1)
+                    df = df.merge(df2, copy=False)
+                    # df.drop('tmp', axis=1, inplace=True)
+                    # df2.drop('tmp', axis=1, inplace=True)
             else:
                 if df is None:
                     cols = []
@@ -79,13 +82,15 @@ class Rule(object):
                 for index in body[1]:
                     if index not in cols:
                         # merge the corresponding type
-                        df2 = types[self.variable_types[index]].copy()
+                        df2 = types[self.variable_types[index]]#.copy()
                         df2.columns = [index]
                         df['tmp'] = 1
                         df2['tmp'] = 1
-                        df = df.merge(df2).drop('tmp', axis=1)
-                        if "_dummy" in df.columns:
-                            df = df.drop('_dummy', axis=1)
+                        df = df.merge(df2, copy=False)
+                        # df.drop('tmp', axis=1, inplace=True)
+                        df2.drop('tmp', axis=1, inplace=True)
+                        # if "_dummy" in df.columns:
+                        #     df.drop('_dummy', axis=1, inplace=True)
         if df is None:
             cols = []
             df = pd.DataFrame([-1], columns=["_dummy"])
@@ -95,13 +100,15 @@ class Rule(object):
         for index in self.head[1]:
             if index not in cols:
                 # merge the corresponding type
-                df2 = types[self.variable_types[index]].copy()
+                df2 = types[self.variable_types[index]]#.copy()
                 df2.columns = [index]
                 df['tmp'] = 1
                 df2['tmp'] = 1
-                df = df.merge(df2).drop('tmp', axis=1)
-                if "_dummy" in df.columns:
-                    df = df.drop('_dummy', axis=1)
+                df = df.merge(df2, copy=False)
+                # df.drop('tmp', axis=1, inplace=True)
+                df2.drop('tmp', axis=1, inplace=True)
+                # if "_dummy" in df.columns:
+                #     df.drop('_dummy', axis=1, inplace=True)
 
         for body in self.body:
             if body[2]:
