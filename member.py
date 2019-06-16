@@ -34,9 +34,8 @@ bk = {
     "empty": pd.DataFrame([[()]], dtype=object)
 }
 print(bk)
-# assert False
-grounder = Grounder(bk, types)
 
+grounder = Grounder(bk, types)
 
 num = Predicate("num", ["num"])
 zero = Predicate("list", ["num"])
@@ -49,7 +48,7 @@ target = Predicate("target", ["num", "num"], ts=[num, zero])
 helper = Predicate("helper", ["num", "num"], ts=[num, zero])
 
 ri = RuleIndex()
-target_t = Template(target, [head, succ, invented, helper], ri, max_var=3, safe_head=True, not_identical=helper)
+target_t = Template(target, [head, succ, invented, helper, target], ri, max_var=3, safe_head=True, not_identical=helper)
 invented_t = Template(helper, [head, succ, invented, helper], ri, max_var=3, safe_head=True)#, not_identical=target)
 
 print("template generating")
@@ -189,6 +188,7 @@ with tf.Graph().as_default():
 
     py_constraints = set()
     init = tf.global_variables_initializer()
+    softmax_weights = tf.map_fn(tf.math.softmax, weight_stopped)
     with tf.Session() as sess:
         sess.run(init)
 
@@ -227,7 +227,7 @@ with tf.Graph().as_default():
 
 
 
-        out, wis, mod = sess.run([ex.out, weight_stopped, ex.model_])
+        out, wis, mod = sess.run([ex.out, softmax_weights, ex.model_])
 
 
 def sort_grounded_rules(grounded_rules, rule_weights):

@@ -181,7 +181,7 @@ class Example(object):
 
     @autograph.convert()
     def softmax_weighted_output(self, weights, ws, bs, ns):
-        soft_max_weights = tf.math.softmax(weights)
+        soft_max_weights = weights#tf.math.softmax(weights)
         i = tf.constant(0)
         ending_val = self.shape - 2
         c = lambda i, arr: tf.less(i, ending_val)
@@ -233,9 +233,10 @@ class Example(object):
     def loss_while_RL(self, ws, bs, ns):
         # for each clause compute output
         # reduce by prob_sum outputs # todo tf.reduce_max(, axis = 0self.softmax_reduce_prob_sum
-        self.out = self.softmax_reduce_prob_sum(tf.map_fn(lambda w:
-                                                          self.softmax_weighted_output(w, ws, bs, ns), self.weights))
-
+        # self.out = self.softmax_reduce_prob_sum(tf.map_fn(lambda w:
+        #                                                   self.softmax_weighted_output(w, ws, bs, ns), self.weights))
+        sf_weights = tf.map_fn(tf.math.softmax, self.weights)
+        self.out = self.softmax_weighted_output(tf.reduce_max(sf_weights, axis=0), ws, bs, ns)
         # supported loss
         unweighted_loss = self.out - self.model_
         weighted_loss = tf.constant(2.0) * (1 - self.trainable_model) * \
