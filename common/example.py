@@ -20,9 +20,11 @@ class Example(object):
         self.model = tf.Variable(initial_value=initial_value)#, constraint=lambda x: tf.clip_by_value(x, 0.0, 1.0))
 
         # self.trainable_model = tf.ones_like(self.model)
+        self.example = initial_value
         self.trainable_model = tf.cast(dense_mask, dtype=tf.float32)
         self.sig_model = tf.sigmoid(self.model)
-        self.model_ = tf.stop_gradient((1 - self.trainable_model) * self.model) + self.trainable_model * self.sig_model
+        # todo stop_gradient, self.model
+        self.model_ = (1 - self.trainable_model) * self.sig_model + self.trainable_model * self.sig_model
         # self.model_ = tf.Variable(initial_value=self.model_init, trainable=False)
     # @property
     # def model(self):
@@ -237,11 +239,17 @@ class Example(object):
                                                           self.softmax_weighted_output(w, ws, bs, ns), self.weights))
 
         # supported loss
+        # print(self.model_)
+        # print(self.out)
+        # print(self.example)
         unweighted_loss = self.out - self.model_
-        weighted_loss = tf.constant(2.0) * (1 - self.trainable_model) * \
-                        unweighted_loss + self.trainable_model * unweighted_loss
+        example_loss1 = (1 - self.trainable_model) * (self.out - self.example)
+        example_loss2 = (1 - self.trainable_model) * (self.example - self.model_)
+        weighted_loss = self.trainable_model * unweighted_loss
         # return tf.reduce_sum(tf.abs(tf.nn.dropout(weighted_loss, seed=0, rate=tf.constant(0.0))))
-        return tf.reduce_sum(tf.square(weighted_loss))#0.5 * (tf.abs(weighted_loss) +
+        return tf.reduce_sum(tf.square(weighted_loss) +
+                             tf.square(example_loss1) +
+                             tf.square(example_loss2))#0.5 * (tf.abs(weighted_loss) +
 
     def softmax_reduce_prob_sum(self, vals):
         i = tf.constant(0)

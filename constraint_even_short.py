@@ -12,7 +12,7 @@ import time
 
 np.random.seed(1)
 
-EPOCHS = 1400
+EPOCHS = 140
 LEARNING_RATE_START = 5e-2#e-1
 LASSO_MODEL = 1.0
 LASSO_WEIGHTS = 1.0
@@ -108,7 +108,7 @@ with tf.Graph().as_default():
     sig_weights_sum = tf.reduce_mean(tf.map_fn(tf.sigmoid, weights, dtype=tf.float32))
     lasso_loss = tf.constant(LASSO_WEIGHTS) * sig_weights_sum
     support_loss = ex.loss_while_RL(data_weights, data_bodies, data_negs)
-    same_rule_loss = 10.0 * tf.reduce_sum(tf.reduce_prod(tf.math.top_k(tf.transpose(tf.map_fn(tf.math.softmax, weights)), k=2).values, axis=1))
+    same_rule_loss = 1.0 * tf.reduce_sum(tf.reduce_prod(tf.math.top_k(tf.transpose(tf.map_fn(tf.math.softmax, weights)), k=2).values, axis=1))
     loss = support_loss + lasso_model + lasso_loss# + lasso_loss + lasso_model
     loss_change = loss
     # ranked_loss = ex.softmax_ranked_loss(data_weights, data_bodies, data_negs, ranked_model)

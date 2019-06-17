@@ -38,25 +38,28 @@ print(bk)
 grounder = Grounder(bk, types)
 
 
-num = Predicate("num", ["num"])
-zero = Predicate("list", ["num"])
-succ = Predicate("tail", ["num", "num"])
-head = Predicate("head", ["num", "num"])
-invented = Predicate("empty", ["num"])
-false = Predicate("_false", ["num"])
 
-target = Predicate("target", ["num", "num"], ts=[num, zero])
+# invented = Predicate("i", ["e"])
+edge = Predicate("edge", ["e", "e"])
+colour = Predicate("colour", ["e", "e"])
+red = Predicate("red", ["e"])
+green = Predicate("green", ["e"])
+
+false = Predicate("_false", ["e"])
+
+target = Predicate("target", ["e"])
+# target = Predicate("target", ["num", "num"], ts=[num, zero])
 # helper = Predicate("helper", ["num", "num"], ts=[num, zero])
 
 ri = RuleIndex()
-target_t = Template(target, [head, succ, target, invented], ri, max_var=3, safe_head=True)#, not_identical=helper)
+target_t = Template(target, [edge, colour, red, green], ri, max_var=3, safe_head=True)#, not_identical=helper)
 # invented_t = Template(helper, [head, succ, helper], ri, max_var=3, safe_head=True)#, not_identical=target)
 
 print("template generating")
 
 t_template = time.clock()
 for template in [target_t]:#, invented_t]:
-    grounder.add_rules(template.generate_rules(max_pos=3, max_neg=0, min_total=1, max_total=2))
+    grounder.add_rules(template.generate_rules(max_pos=3, max_neg=0, min_total=1, max_total=3))
 
 for r in grounder.grounded_rules:
     print(r)

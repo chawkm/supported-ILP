@@ -140,7 +140,7 @@ with tf.Graph().as_default():
     ex = Example(model_shape, weight_stopped, model_indexes, model_vals)
     lasso_model = lasso_increase * tf.constant(LASSO_MODEL) * tf.reduce_mean(tf.abs(ex.trainable_model * ex.sig_model))
     lasso_loss = lasso_increase * tf.constant(LASSO_WEIGHTS) * tf.reduce_mean(tf.abs((1 - weight_mask) * sig_weights * body_var_weights))
-    support_loss = ex.loss_while(data_weights, data_bodies, data_negs)
+    support_loss = ex.loss_while_RL(data_weights, data_bodies, data_negs)
     loss = support_loss + lasso_loss + lasso_model
 
 
@@ -165,7 +165,7 @@ with tf.Graph().as_default():
     ex2 = Example(model_shape2, weight_stopped, model_indexes2, model_vals2)
     lasso_model2 = lasso_increase * tf.constant(LASSO_MODEL) * tf.reduce_mean(tf.abs(ex2.trainable_model * ex2.sig_model))
     # lasso_loss2 = tf.constant(LASSO_WEIGHTS) * tf.reduce_mean(tf.abs((1 - weight_mask) * sig_weights * body_var_weights))
-    support_loss2 = ex2.loss_while(data_weights2, data_bodies2, data_negs2)
+    support_loss2 = ex2.loss_while_RL(data_weights2, data_bodies2, data_negs2)
     # loss2 = support_loss2 + lasso_loss2 + lasso_model2
     # opt2 = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss2, global_step=global_step)
     opt = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(support_loss2 + lasso_model2 + loss, global_step=global_step)
