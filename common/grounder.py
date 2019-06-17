@@ -55,6 +55,7 @@ class Grounder(object):
         # sort indexes so that can apply segment maximums
         consequences = [sorted(cons, key=lambda x: x[0]) for cons in consequences]
         print("rules with context", len(self.grounded_rules))
+        print("rule_groundings", sum(len(r.grounding) for r in self.grounded_rules))
 
         print('consequence time', time.time() - ground_end_time)
 

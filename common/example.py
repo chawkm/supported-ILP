@@ -11,18 +11,20 @@ class Example(object):
         self.tf_prob_sum = None
 
         st = tf.SparseTensor(model_indexes, model_vals, dense_shape=[shape])
+        self.example = tf.sparse.to_dense(st)
         mask = tf.SparseTensor(model_indexes, model_vals < 0, dense_shape=[shape])
         dense_mask = tf.sparse.to_dense(mask, default_value=True)
         initial_value = tf.where(dense_mask,
                                     tf.random.uniform([shape], dtype=st.dtype, seed=0),
-                                    tf.sparse.to_dense(st))
+                                    self.example)
 
-        self.model = tf.Variable(initial_value=initial_value)#, constraint=lambda x: tf.clip_by_value(x, 0.0, 1.0))
+        self.model = tf.Variable(initial_value=initial_value, constraint=lambda x: tf.clip_by_value(x, 0.0, 1.0))
 
         # self.trainable_model = tf.ones_like(self.model)
         self.trainable_model = tf.cast(dense_mask, dtype=tf.float32)
         self.sig_model = tf.sigmoid(self.model)
-        self.model_ = tf.stop_gradient((1 - self.trainable_model) * self.model) + self.trainable_model * self.sig_model
+        # todo tf.stop_gradient
+        self.model_ = (1 - self.trainable_model) * self.model + self.trainable_model * self.sig_model
         # self.model_ = tf.Variable(initial_value=self.model_init, trainable=False)
     # @property
     # def model(self):
@@ -231,18 +233,24 @@ class Example(object):
 
     @autograph.convert()
     def loss_while_RL(self, ws, bs, ns):
+        # self.model = self.model[tf.size(self.model) - 2].assign(1.0)
         # for each clause compute output
         # reduce by prob_sum outputs # todo tf.reduce_max(, axis = 0self.softmax_reduce_prob_sum
         # self.out = self.softmax_reduce_prob_sum(tf.map_fn(lambda w:
-        #                                                   self.softmax_weighted_output(w, ws, bs, ns), self.weights))
+        #                                                   self.softmax_weighted_output(tf.math.softmax(w), ws, bs, ns), self.weights))
+
         sf_weights = tf.map_fn(tf.math.softmax, self.weights)
         self.out = self.softmax_weighted_output(tf.reduce_max(sf_weights, axis=0), ws, bs, ns)
         # supported loss
         unweighted_loss = self.out - self.model_
-        weighted_loss = tf.constant(2.0) * (1 - self.trainable_model) * \
-                        unweighted_loss + self.trainable_model * unweighted_loss
+        example_loss = (1 - self.trainable_model) * (self.out - self.example)
+        model_loss = (1 - self.trainable_model) * (self.model_ - self.example)
+        # weighted_loss = tf.constant(1.0) * (1 - self.trainable_model) * \
+        #                 unweighted_loss + self.trainable_model * unweighted_loss
         # return tf.reduce_sum(tf.abs(tf.nn.dropout(weighted_loss, seed=0, rate=tf.constant(0.0))))
-        return tf.reduce_sum(tf.square(weighted_loss))#0.5 * (tf.abs(weighted_loss) +
+        return tf.reduce_sum(tf.square(model_loss)) + \
+               tf.reduce_sum(tf.square(unweighted_loss)) + \
+               tf.reduce_sum(tf.square(example_loss))#0.5 * (tf.abs(weighted_loss) +
 
     def softmax_reduce_prob_sum(self, vals):
         i = tf.constant(0)

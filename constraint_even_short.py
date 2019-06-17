@@ -12,10 +12,10 @@ import time
 
 np.random.seed(1)
 
-EPOCHS = 1400
-LEARNING_RATE_START = 5e-2#e-1
-LASSO_MODEL = 1.0
-LASSO_WEIGHTS = 1.0
+EPOCHS = 340
+LEARNING_RATE_START = 1e-1#e-1
+LASSO_MODEL = 2.0
+LASSO_WEIGHTS = 2.0
 BODY_WEIGHT = 0.5
 VAR_WEIGHT = 0.5
 
@@ -35,21 +35,24 @@ invented = Predicate("i", ["num"])
 false = Predicate("_false", ["num"])
 
 ri = RuleIndex()
-target_t = Template(target, [zero, succ, target], ri, max_var=3, safe_head=True, not_identical=invented)
-# invented_t = Template(invented, [zero, succ, invented, target], ri, max_var=3, safe_head=True, not_identical=target)
+target_t = Template(target, [zero, succ, invented], ri, max_var=3, safe_head=True, not_identical=invented)
+invented_t = Template(invented, [zero, succ, target], ri, max_var=3, safe_head=True, not_identical=target)
 
 print("template generating")
 
 t_template = time.clock()
-for template in [target_t]:#, invented_t]:
-    grounder.add_rules(template.generate_rules(max_pos=3, max_neg=0, min_total=1, max_total=2))
+for template in [target_t, invented_t]:
+    grounder.add_rules(template.generate_rules(max_pos=3, max_neg=1, min_total=1, max_total=2))
 
 print("template generation time ", time.clock() - t_template)
 
+for r in grounder.grounded_rules:
+    print(r)
+
 example1_ctx = {}
 
-example1 = {('target', (0,)): 1.0, ('target', (7,)): 0.0,
-            ('target', (20,)): 1.0, ('target', (9,)): 0.0,
+example1 = {('target', (0,)): 1.0, ('target', (1,)): 0.0,
+            ('target', (2,)): 1.0, ('target', (3,)): 0.0,
             ('target', (34,)): 1.0, ('target', (17,)): 0.0,
             ('target', (38,)): 1.0, ('target', (33,)): 0.0,
             ('target', (8,)): 1.0, ('target', (37,)): 0.0}
@@ -82,7 +85,7 @@ with tf.Graph().as_default():
     no weights stopped_gradient
     """
     N_Clauses = 3
-    weight_initial_value = tf.random.uniform([N_Clauses, len(grounder.grounded_rules)],
+    weight_initial_value = tf.random.uniform([N_Clauses, len(grounder.grounded_rules) + 1],
                                              seed=1)  # tf.ones([len(grounder.grounded_rules)]) * -1.0
 
     weights = tf.Variable(weight_initial_value, dtype=tf.float32, name='weights')
@@ -104,12 +107,16 @@ with tf.Graph().as_default():
     model_vals = tf.constant(mvs)
     ex = Example(model_shape, weight_stopped, model_indexes, model_vals)
     lasso_model = tf.constant(LASSO_MODEL) * tf.reduce_mean(tf.abs(ex.trainable_model * ex.sig_model))
-    # lasso_loss = tf.constant(LASSO_WEIGHTS) * tf.reduce_mean(tf.abs(sig_weights * body_var_weights))
-    sig_weights_sum = tf.reduce_mean(tf.map_fn(tf.sigmoid, weights, dtype=tf.float32))
+    sig_weights_sum = tf.reduce_sum(tf.map_fn(tf.math.softmax, weights, dtype=tf.float32))
     lasso_loss = tf.constant(LASSO_WEIGHTS) * sig_weights_sum
     support_loss = ex.loss_while_RL(data_weights, data_bodies, data_negs)
-    same_rule_loss = 10.0 * tf.reduce_sum(tf.reduce_prod(tf.math.top_k(tf.transpose(tf.map_fn(tf.math.softmax, weights)), k=2).values, axis=1))
-    loss = support_loss + lasso_model + lasso_loss# + lasso_loss + lasso_model
+
+    same_rule_loss = 1.0 * tf.reduce_sum(
+        tf.reduce_prod(tf.math.top_k(tf.transpose(tf.map_fn(tf.math.softmax, weights)), k=2).values, axis=1))
+
+    entropy = tf.reduce_sum(tf.map_fn(lambda w: w * tf.log(w + 1e-3), tf.map_fn(tf.math.softmax, weights)))
+
+    loss = support_loss + lasso_model + lasso_loss + same_rule_loss  # + lasso_loss + lasso_model
     loss_change = loss
     # ranked_loss = ex.softmax_ranked_loss(data_weights, data_bodies, data_negs, ranked_model)
 
@@ -132,7 +139,7 @@ with tf.Graph().as_default():
                               lambda: 0.0)
 
     opt = tf.train.AdamOptimizer(learning_rate=learning_rate)\
-        .minimize(loss + constraint_loss,global_step=global_step)
+        .minimize(loss,global_step=global_step)
 
 
     weight_i = tf.placeholder(dtype=tf.int32)
@@ -150,11 +157,11 @@ with tf.Graph().as_default():
             _, l, cl = sess.run([opt, support_loss, constraint_loss], feed_dict={constraints: list(py_constraints)})  # , weight_stopped, ex.model_, ex.out]), ex.weights
             print("loss", l, cl)
             if l < 0.30:#i % 10 == 0 and
-                r1, r2, r3 = sess.run(argmax, feed_dict={constraints: list(py_constraints)})
-                print("Constrain", r1 ,r2 ,r3)
-                print(grounder.grounded_rules[r1])
-                print(grounder.grounded_rules[r2])
-                print(grounder.grounded_rules[r3])
+                # r1, r2, r3 = sess.run(argmax, feed_dict={constraints: list(py_constraints)})
+                # print("Constrain", r1 ,r2 ,r3)
+                # print(grounder.grounded_rules[r1])
+                # print(grounder.grounded_rules[r2])
+                # print(grounder.grounded_rules[r3])
                 #todo
                 # py_constraints.add((r1,r2,r3))
 
@@ -164,19 +171,19 @@ with tf.Graph().as_default():
                 # todo
                 # sess.run(init)
 
-                sess.run(assign_op, feed_dict={weight_i: 0, weight_j: r1, weight_val: -1000})
-                sess.run(assign_op, feed_dict={weight_i: 0, weight_j: r2, weight_val: 0})
-                sess.run(assign_op, feed_dict={weight_i: 0, weight_j: r3, weight_val: 0})
+                # sess.run(assign_op, feed_dict={weight_i: 0, weight_j: r1, weight_val: -1000})
+                # sess.run(assign_op, feed_dict={weight_i: 0, weight_j: r2, weight_val: 0})
+                # sess.run(assign_op, feed_dict={weight_i: 0, weight_j: r3, weight_val: 0})
+                #
+                # sess.run(assign_op, feed_dict={weight_i: 1, weight_j: r2, weight_val: -1000})
+                # sess.run(assign_op, feed_dict={weight_i: 1, weight_j: r1, weight_val: 0})
+                # sess.run(assign_op, feed_dict={weight_i: 1, weight_j: r3, weight_val: 0})
+                #
+                # sess.run(assign_op, feed_dict={weight_i: 2, weight_j: r3, weight_val: -1000})
+                # sess.run(assign_op, feed_dict={weight_i: 2, weight_j: r1, weight_val: 0})
+                # sess.run(assign_op, feed_dict={weight_i: 2, weight_j: r2, weight_val: 0})
 
-                sess.run(assign_op, feed_dict={weight_i: 1, weight_j: r2, weight_val: -1000})
-                sess.run(assign_op, feed_dict={weight_i: 1, weight_j: r1, weight_val: 0})
-                sess.run(assign_op, feed_dict={weight_i: 1, weight_j: r3, weight_val: 0})
-
-                sess.run(assign_op, feed_dict={weight_i: 2, weight_j: r3, weight_val: -1000})
-                sess.run(assign_op, feed_dict={weight_i: 2, weight_j: r1, weight_val: 0})
-                sess.run(assign_op, feed_dict={weight_i: 2, weight_j: r2, weight_val: 0})
-
-                # break
+                break
 
 
 

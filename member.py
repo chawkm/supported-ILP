@@ -15,17 +15,20 @@ from itertools import permutations, chain
 
 np.random.seed(1)
 
-EPOCHS = 540
+EPOCHS = 200
 LEARNING_RATE_START = 9e-2#e-1
 LASSO_MODEL = 1.0
 LASSO_WEIGHTS = 4.0
 BODY_WEIGHT = 0.5
 VAR_WEIGHT = 0.5
 
-nums = [0,1,2,3]
+list_length = 3
+nums = [i for i in range (list_length)]
 types = {"num": pd.DataFrame(nums, dtype=object)}  # edges
 
-lists = [tuple(x) for x in chain(*[permutations(nums, i) for i in range(4)])]
+lists = [tuple(x) for x in chain(*[permutations(nums, i) for i in range(list_length + 1)])]
+
+noise = 1.00
 
 bk = {
     "num" : pd.DataFrame([n for n in nums], dtype=object),
@@ -48,7 +51,7 @@ target = Predicate("target", ["num", "num"], ts=[num, zero])
 helper = Predicate("helper", ["num", "num"], ts=[num, zero])
 
 ri = RuleIndex()
-target_t = Template(target, [head, succ, invented, helper, target], ri, max_var=3, safe_head=True, not_identical=helper)
+target_t = Template(target, [head, succ, target, helper], ri, max_var=3, safe_head=True)#, not_identical=helper)
 invented_t = Template(helper, [head, succ, invented, helper], ri, max_var=3, safe_head=True)#, not_identical=target)
 
 print("template generating")
@@ -56,6 +59,8 @@ print("template generating")
 t_template = time.clock()
 # for template in [target_t, invented_t]:
 #     grounder.add_rules(template.generate_rules(max_pos=3, max_neg=1, min_total=1, max_total=2))
+# empty_rule = Rule(head=("empty", []), body=[], variable_types=[], weight=ri.get_and_inc())
+# grounder.add_rule(empty_rule)
 
 grounder.add_rules(target_t.generate_rules(max_pos=3, max_neg=1, min_total=1, max_total=2))
 grounder.add_rules(invented_t.generate_rules(max_pos=3, max_neg=0, min_total=1, max_total=2))
@@ -71,12 +76,12 @@ print("template generation time ", time.clock() - t_template)
 
 example1_ctx = {}
 
-example1 = {('target', (x, y)): 0.0 for y in lists for x in y}
+example1 = {('target', (x, y)): 0.0 if np.random.random() < noise else 1.0 for y in lists for x in y}
 
 for a in lists:
     for b in nums:
         if b not in a:
-            example1[('target', (b, a))] = 1.0
+            example1[('target', (b, a))] = 1.0 if np.random.random() < noise else 0.0
 
 # print(example1)
 # assert False
@@ -108,7 +113,7 @@ with tf.Graph().as_default():
     no weights stopped_gradient
     """
     N_Clauses = 3
-    weight_initial_value = tf.random.uniform([N_Clauses, len(grounder.grounded_rules)],
+    weight_initial_value = tf.random.uniform([N_Clauses, len(grounder.grounded_rules) + 1],
                                              seed=1)  # tf.ones([len(grounder.grounded_rules)]) * -1.0
 
     weights = tf.Variable(weight_initial_value, dtype=tf.float32, name='weights')
@@ -148,6 +153,8 @@ with tf.Graph().as_default():
     support_loss = ex.loss_while_RL(data_weights, data_bodies, data_negs)
 
     same_rule_loss = 1.0 * tf.reduce_sum(tf.reduce_prod(tf.math.top_k(tf.transpose(tf.map_fn(tf.math.softmax, weights)), k=2).values, axis=1))
+
+    entropy = tf.reduce_sum(tf.map_fn(lambda w: w*tf.log(w+1e-3), tf.map_fn(tf.math.softmax, weights)))
 
 
     loss = support_loss + lasso_model + lasso_loss + same_rule_loss# + lasso_loss + lasso_model
@@ -192,7 +199,7 @@ with tf.Graph().as_default():
         for i in range(EPOCHS):
             _, l = sess.run([opt, support_loss])  # , weight_stopped, ex.model_, ex.out]), ex.weights
             print("loss", l)
-            if l < 0.25:#i % 10 == 0 and
+            if l < 0.05:#i % 10 == 0 and
                 # r1, r2, r3 = sess.run(argmax)
                 # print("Constrain", r1 ,r2 ,r3)
                 # print(grounder.grounded_rules[r1])
@@ -223,7 +230,7 @@ with tf.Graph().as_default():
 
 
 
-        out, wis, mod = sess.run([ex.out, softmax_weights, ex.model_])
+        out, wis, mod, ent = sess.run([ex.out, softmax_weights, ex.model_, entropy])
 
 
 def sort_grounded_rules(grounded_rules, rule_weights):
@@ -237,3 +244,5 @@ for i in range(N_Clauses):
     print("clause " + str(i))
     for w, r in sort_grounded_rules(grounder.grounded_rules, wis[i])[:10]:
         print(w, r)
+
+print("entropy", ent)
