@@ -26,13 +26,7 @@ for r in grounded_rules:
     print(r)
 
 types = pd.DataFrame([0, 1, 2, 3, 4, 5], columns=["num"])
-background_knowledge = {
-    # "zero": pd.DataFrame([0]),
-    # "succ": pd.DataFrame([(1, 0), (2, 1), (3, 2), (4, 3), (5, 4)])
-}
-
-# r = Rule(head=("target", [0]), body=[("zero", [0], False)], variable_types=['num'], weight=1000)
-# r.gen_grounding(background_knowledge, types)
+background_knowledge = {}
 
 ground_start_time = time.clock()
 

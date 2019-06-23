@@ -1,21 +1,19 @@
-import tensorflow as tf
-from tensorflow.contrib import autograph
-import multiprocessing
-from common.example import Example
-from common.rule_templates import Predicate, Template, RuleIndex
-import pandas as pd
-from common.supported_model import Rule, gen_possible_consequences
-from common.preprocess_rules import preprocess_rules_to_tf
-from common.grounder import Grounder
-import numpy as np
 import time
 from itertools import permutations, chain
 
+import numpy as np
+import pandas as pd
+import tensorflow as tf
+
+from common.example import Example
+from common.grounder import Grounder
+from common.preprocess_rules import preprocess_rules_to_tf
+from common.rule_templates import Predicate, Template, RuleIndex
 
 np.random.seed(1)
 
 EPOCHS = 540
-LEARNING_RATE_START = 9e-2#e-1
+LEARNING_RATE_START = 9e-2
 LASSO_MODEL = 1.0
 LASSO_WEIGHTS = 4.0
 BODY_WEIGHT = 0.5
@@ -34,12 +32,8 @@ bk = {
     "empty": pd.DataFrame([[()]], dtype=object)
 }
 print(bk)
-# assert False
 grounder = Grounder(bk, types)
 
-
-
-# invented = Predicate("i", ["e"])
 edge = Predicate("edge", ["e", "e"])
 colour = Predicate("colour", ["e", "e"])
 red = Predicate("red", ["e"])
@@ -48,25 +42,19 @@ green = Predicate("green", ["e"])
 false = Predicate("_false", ["e"])
 
 target = Predicate("target", ["e"])
-# target = Predicate("target", ["num", "num"], ts=[num, zero])
-# helper = Predicate("helper", ["num", "num"], ts=[num, zero])
 
 ri = RuleIndex()
-target_t = Template(target, [edge, colour, red, green], ri, max_var=3, safe_head=True)#, not_identical=helper)
-# invented_t = Template(helper, [head, succ, helper], ri, max_var=3, safe_head=True)#, not_identical=target)
+target_t = Template(target, [edge, colour, red, green], ri, max_var=3, safe_head=True)
 
 print("template generating")
 
 t_template = time.clock()
-for template in [target_t]:#, invented_t]:
+for template in [target_t]:
     grounder.add_rules(template.generate_rules(max_pos=3, max_neg=0, min_total=1, max_total=3))
 
 for r in grounder.grounded_rules:
     print(r)
-# r3 = Rule(head=("target", [0, 1]), body=[("father", [0, 2], False), ("mother", [2, 1], False)],
-#           variable_types=["num", "num", "num"], weight=ri.get_and_inc())
-#
-# grounder.add_rule(r3)
+
 print("template generation time ", time.clock() - t_template)
 
 example1_ctx = {}
@@ -78,13 +66,7 @@ for a in lists:
         if b not in a:
             example1[('target', (b, a))] = 0.0
 
-# print(example1)
-# assert False
 mis, mvs, ground_indexes, consequences = grounder.ground(example1, example1_ctx)
-#
-# print(mis)
-# print(mvs)
-# assert False
 
 for k, v in zip(sorted(ground_indexes.items(), key=lambda x: x[1]), consequences):
     print(k, [grounder.grounded_rules[r[0]] for r in v])
@@ -105,7 +87,7 @@ with tf.Graph().as_default():
     """
     N clauses
     J = len(grounder.grounded_rules) possible choices for each clause
-    Need to add 'empty' clause
+    Not including an 'empty' clause
 
     weights = N x J
 
@@ -113,31 +95,11 @@ with tf.Graph().as_default():
     """
     N_Clauses = 3
     weight_initial_value = tf.random.uniform([N_Clauses, len(grounder.grounded_rules) + 1],
-                                             seed=1)  # tf.ones([len(grounder.grounded_rules)]) * -1.0
+                                             seed=1)
 
     weights = tf.Variable(weight_initial_value, dtype=tf.float32, name='weights')
 
-    # weight_mask = tf.zeros([len(grounder.grounded_rules)])
-    # # weight_mask = tf.sparse.to_dense(
-    # #     tf.sparse.SparseTensor(indices=[[len(grounder.grounded_rules) - 2], [len(grounder.grounded_rules) - 1]],
-    # #                            values=[1.0, 1.0], dense_shape=[len(grounder.grounded_rules)]))
-    # weight_initial_value = weight_mask * tf.ones([len(grounder.grounded_rules)]) * 0.8 + \
-    #                        (1 - weight_mask) * tf.ones(
-    #     [len(grounder.grounded_rules)]) * -1.0  # tf.random.uniform([len(grounded_rules)], 0.45, 0.55, seed=0) #
-    # weight_initial_value = tf.random.uniform([len(grounder.grounded_rules)], 0.1, 0.9, seed=0)
-    # weights = tf.Variable(weight_initial_value, dtype=tf.float32, name='weights')
-
-    # sig_weights = tf.sigmoid(weights)
-    # weight_stopped = tf.stop_gradient(weight_mask * weights) + (1 - weight_mask) * sig_weights
-
-    # G_len = len(ground_indexes)
-    # ranked_mask = tf.sparse_to_dense([[G_len - 2], [G_len - 1]], [G_len], [1.0, 1.0])
-    # ranked_init = (1 - ranked_mask) * tf.random.uniform([G_len], seed=0) + ranked_mask * tf.ones([G_len]) * -100.0
-    # ranked_model_ = tf.Variable(ranked_init)
-    # ranked_model = tf.stop_gradient(ranked_mask * ranked_model_) + (1 - ranked_mask) * ranked_model_
-
-    # sig_weights = tf.sigmoid(weights)
-    weight_stopped = weights  # sig_weights
+    weight_stopped = weights
 
     # model shape includes truth and negative values
     print("length of ground indexes", len(ground_indexes))
@@ -156,35 +118,10 @@ with tf.Graph().as_default():
 
     loss = support_loss + lasso_model + lasso_loss + same_rule_loss# + lasso_loss + lasso_model
     loss_change = loss
-    # ranked_loss = ex.softmax_ranked_loss(data_weights, data_bodies, data_negs, ranked_model)
-
-
-    # argmax = tf.argmax(weights, axis=1)
-
     sig_weights = tf.map_fn(tf.sigmoid, weights, dtype=tf.float32)
-
-    # constraints = tf.placeholder(dtype=tf.int64)  # , shape=[-1, 3])
-    # # constraint_loss = tf.cond(tf.size(constraints) > 0,
-    # #                           lambda: - tf.reduce_sum(tf.map_fn(lambda x: tf.log((1 - tf.reduce_max(sig_weights[:, x[0]])) *
-    # #                                                              (1 - tf.reduce_max(sig_weights[:, x[1]])) *
-    # #                                                              (1 - tf.reduce_max(sig_weights[:, x[2]]))),
-    # #                                             constraints, dtype=tf.float32)),
-    # #                           lambda: 0.0)
-    # constraint_loss = tf.cond(tf.size(constraints) > 0,
-    #                           lambda: tf.reduce_sum(tf.map_fn(lambda x: tf.reduce_max(sig_weights[:, x[0]]) *
-    #                                                          tf.reduce_max(sig_weights[:, x[1]]) *
-    #                                                          tf.reduce_max(sig_weights[:, x[2]]),
-    #                                         constraints, dtype=tf.float32)),
-    #                           lambda: 0.0)
 
     opt = tf.train.AdamOptimizer(learning_rate=learning_rate)\
         .minimize(loss,global_step=global_step)
-
-
-    # weight_i = tf.placeholder(dtype=tf.int32)
-    # weight_j = tf.placeholder(dtype=tf.int32)
-    # weight_val = tf.placeholder(dtype=tf.float32)
-    # assign_op = weights[weight_i, weight_j].assign(weight_val)
 
     py_constraints = set()
     init = tf.global_variables_initializer()
@@ -193,38 +130,10 @@ with tf.Graph().as_default():
 
         print("before", sess.run(weight_stopped))
         for i in range(EPOCHS):
-            _, l = sess.run([opt, support_loss])  # , weight_stopped, ex.model_, ex.out]), ex.weights
+            _, l = sess.run([opt, support_loss])
             print("loss", l)
-            if l < 0.25:#i % 10 == 0 and
-                # r1, r2, r3 = sess.run(argmax)
-                # print("Constrain", r1 ,r2 ,r3)
-                # print(grounder.grounded_rules[r1])
-                # print(grounder.grounded_rules[r2])
-                # print(grounder.grounded_rules[r3])
-                #todo
-                # py_constraints.add((r1,r2,r3))
-
-                # max_rule_indices = [r1, r2, r3]
-                # ri = np.random.choice([0, 1, 2])
-                # sess.run(assign_op, feed_dict={weight_i: ri, weight_j: max_rule_indices[ri], weight_val: -1000})
-                # todo
-                # sess.run(init)
-
-                # sess.run(assign_op, feed_dict={weight_i: 0, weight_j: r1, weight_val: -1000})
-                # sess.run(assign_op, feed_dict={weight_i: 0, weight_j: r2, weight_val: 0})
-                # sess.run(assign_op, feed_dict={weight_i: 0, weight_j: r3, weight_val: 0})
-                #
-                # sess.run(assign_op, feed_dict={weight_i: 1, weight_j: r2, weight_val: -1000})
-                # sess.run(assign_op, feed_dict={weight_i: 1, weight_j: r1, weight_val: 0})
-                # sess.run(assign_op, feed_dict={weight_i: 1, weight_j: r3, weight_val: 0})
-                #
-                # sess.run(assign_op, feed_dict={weight_i: 2, weight_j: r3, weight_val: -1000})
-                # sess.run(assign_op, feed_dict={weight_i: 2, weight_j: r1, weight_val: 0})
-                # sess.run(assign_op, feed_dict={weight_i: 2, weight_j: r2, weight_val: 0})
-
+            if l < 0.25:
                 break
-
-
 
         out, wis, mod = sess.run([ex.out, weight_stopped, ex.model_])
 

@@ -1,13 +1,12 @@
-import tensorflow as tf
-from tensorflow.contrib import autograph
-import multiprocessing
-from common.example import Example
-from common.rule_templates import Predicate, Template, RuleIndex
-import pandas as pd
-from common.supported_model import Rule, gen_possible_consequences
-from common.preprocess_rules import preprocess_rules_to_tf
-from common.grounder import Grounder
 import time
+
+import pandas as pd
+import tensorflow as tf
+
+from common.example import Example
+from common.grounder import Grounder
+from common.preprocess_rules import preprocess_rules_to_tf
+from common.rule_templates import Predicate, Template, RuleIndex
 
 EPOCHS = 1400
 LEARNING_RATE_START = 1e-3

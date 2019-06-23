@@ -74,16 +74,12 @@ with tf.Graph().as_default():
     ranked_model = tf.Variable(tf.random_uniform([len(ground_indexes)], maxval=1, dtype=tf.float32), dtype=tf.float32)
 
     weight_mask = tf.zeros([len(grounder.grounded_rules)])
-    # weight_mask = tf.sparse.to_dense(
-    #     tf.sparse.SparseTensor(indices=[[len(grounder.grounded_rules) - 2], [len(grounder.grounded_rules) - 1]],
-    #                            values=[1.0, 1.0], dense_shape=[len(grounder.grounded_rules)]))
     weight_initial_value = weight_mask * tf.ones([len(grounder.grounded_rules)]) * 0.8 + \
                            (1 - weight_mask) * tf.random.uniform([len(grounder.grounded_rules)], seed=0) #* 0.0 # tf.random.uniform([len(grounded_rules)], 0.45, 0.55, seed=0) #
     weights = tf.Variable(weight_initial_value, dtype=tf.float32, name='weights')
 
     sig_weights = tf.sigmoid(weights)
     weight_stopped = tf.stop_gradient(weight_mask * weights) + (1 - weight_mask) * sig_weights
-    # model shape includes truth and negative values
     print("length of ground indexes", len(ground_indexes))
     model_shape = tf.constant(len(ground_indexes))
 

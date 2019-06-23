@@ -8,10 +8,6 @@ from common.supported_model import Rule, gen_possible_consequences
 from common.preprocess_rules import preprocess_rules_to_tf
 import time
 
-# EPOCHS = 590
-# LEARNING_RATE = 5e-3
-# LASSO = 0.05, 2.0 weight loss & reduce_max
-
 EPOCHS = 350
 LEARNING_RATE_START = 1e-1
 LASSO_MODEL = 0.1
@@ -138,20 +134,6 @@ for r in grounded_rules[-2:]:
     print(r)
 
 
-# @autograph.convert()
-# def line_search(op, loss_func, var_list, max_iter):
-#     i = 0
-#     grads_and_vars = op.compute_gradients(loss_func, var_list)
-#     loss = 10000
-#     new_loss = 9999
-#     while i < max_iter and new_loss < loss:
-#         op.apply_gradients(grads_and_vars)
-#         # re compute loss
-#         tmp = loss_func()
-#         loss = new_loss
-#         new_loss = tmp
-
-
 with tf.Graph().as_default():
     global_step = tf.Variable(0, trainable=False)
     learning_rate = tf.train.exponential_decay(LEARNING_RATE_START, global_step, decay_steps=30,
@@ -159,19 +141,12 @@ with tf.Graph().as_default():
 
     body_var_weights = tf.constant(gen_rule_length_penalties(grounded_rules), dtype=tf.float32)
     data_weights, data_bodies, data_negs = preprocess_rules_to_tf(ground_indexes, consequences)
-    # print("ground_indices", ground_indexes)
-    # weight_mask = tf.constant([1.0, 1.0, 0.0, 0.0, 0.0])
-    # weight_mask = tf.sparse.to_dense(tf.sparse.SparseTensor(indices=[[len(grounded_rules) - 2], [len(grounded_rules) - 1]],
-    #                                                                  # [len(grounded_rules) - 2], [len(grounded_rules) - 1]],
-    #                                                         values=[1.0, 1.0], dense_shape=[len(grounded_rules)]))
     weight_mask = tf.zeros([len(grounded_rules)])
     weight_initial_value = weight_mask * tf.ones([len(grounded_rules)]) + \
-                           (1 - weight_mask) * tf.zeros([len(grounded_rules)])# * 0.5 # tf.random.uniform([len(grounded_rules)], 0.45, 0.55, seed=0) #
+                           (1 - weight_mask) * tf.zeros([len(grounded_rules)])
     weights = tf.Variable(weight_initial_value, dtype=tf.float32, name='weights')
-                          # constraint=lambda x: tf.clip_by_value(x, 0.0, 1.0))
     sig_weights = tf.sigmoid(weights)
     weight_stopped = tf.stop_gradient(weight_mask * weights) + (1 - weight_mask) * sig_weights
-    # model shape includes truth and negative values
     print("length of ground indexes", len(ground_indexes))
     model_shape = tf.constant(len(ground_indexes))
 
@@ -206,10 +181,3 @@ for w, r in sort_grounded_rules(grounded_rules, wis)[:10]:
 
 for (k, i), m, o in zip(sorted(ground_indexes.items(), key=lambda x: x[1]), mod, out):
     print(i, k, m, o)
-
-
-# weighted constraint that decreases over time
-# :- i(A), t(A)
-
-# the above shouldn't be the loss
-# it should be some squared/abs difference between their groundings!

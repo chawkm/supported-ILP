@@ -35,15 +35,11 @@ class Template(object):
     def generate_rules(self, max_pos, max_neg, min_total, max_total):
         rules = []
         for length in range(min_total, max_total + 1):
-            #product
             for vals in combinations_with_replacement(self.predicates, length):
                 for pos_len in range(min(max_pos + 1, len(vals) + 1)):
                     if max_neg < (length - pos_len):
                         continue
                     else:
-                        pos_b, neg_b = vals[:pos_len], vals[pos_len:]
-                        # rules.append(Rule())
-                        # print("*************", pos_b, neg_b)
                         rules.extend(self.gen_helper(vals[:pos_len], vals[pos_len:]))
         return rules
 
@@ -66,9 +62,6 @@ class Template(object):
             type_count[k] = filter(lambda x: len(set(x)) <= self.max_var,
                                    self.gen_type_combinations(v))
 
-        # TODO
-        # take product of possible types? or can we keep them and deal with them laterrr?
-        # deal with them later :)
         product_list = []
         sorted_type = {}
         for i, k in enumerate(sorted(type_count)):
@@ -81,15 +74,8 @@ class Template(object):
         for t in variable_types:
             type_i.append(type_index.get(t))
             type_index[t] += 1
-        # print('variable_types', variable_types)
-        # print('type_i', type_i)
-        # print("type_count", type_count)
-        # print('product_list', product_list)
         for prod in product(*product_list):
-            # print('prod', prod)
-
             values = tuple(prod[sorted_type[t]][ti] for t, ti in zip(variable_types, type_i))
-            # print('values', values)
             i = 0
             head = (self.head.index, values[i: i + len(self.head.arg_types)])
             i += len(self.head.arg_types)
@@ -112,17 +98,13 @@ class Template(object):
             # filter safe rules
             if self.safe(head, body, variable_types):
                 _, rule_variables = zip(*sorted(set(zip(values, variable_types))))
-                # print(rule_variables)
                 tuple_body = frozenset(body)
-                # print(tuple_body)
                 if (head, tuple_body) not in rule_hash:
                     rule_hash.add((head, tuple_body))
                     if self.head.ts is not None:
                         for en, t in enumerate(self.head.ts):
                             body.append((t.index, (en,), False))
                     yield Rule(head, body, rule_variables, self.rule_index.get_and_inc())
-
-        # return rules
 
     def safe(self, head, body, variable_types):
         head_vars = set()
@@ -134,8 +116,7 @@ class Template(object):
         pos_body_predicates.add((head[0], tuple(head[1])))
         for typ, b in zip(variable_types[len(head[1]):], body):
             if not b[2]:
-                # positive body
-                # check not repeated
+                # positive body and check not repeated
                 if (b[0], tuple(b[1])) in pos_body_predicates:
                     return False
                 pos_body_predicates.add((b[0], tuple(b[1])))
@@ -162,22 +143,11 @@ class Template(object):
         return True
 
     def gen_type_combinations(self, count):
-        # choose_num = sum(len(p.arg_types) for p in chain([self.head], pos_b, neg_b))
         variables = list(range(min(self.max_var, count)))
         # generate all variable combinations
-
-        # print("variables", variables)
-        # print("count", count)
-        # print("variables", variables)
-        # print("combinations", list(combinations_with_replacement(variables, len(self.head.arg_types))))
         head_combinations = product(*[list(range(min(self.max_var, i+1))) for i in range(len(self.head.arg_types))])
-        # print("hc", list(head_combinations))
         variable_combinations = filter(self.no_gaps,
                                        (h + t for h in head_combinations for t in product(variables, repeat=count - len(self.head.arg_types))))
-        # print("var combs", list(variable_combinations))
-        # for combination in variable_combinations:
-        #     rules.append(Rule())
-        # print(variable_combinations)
         return variable_combinations
 
     @staticmethod
@@ -191,42 +161,5 @@ class Template(object):
             if y - x > 1:
                 return False
 
-        # if combination[0] != 0:
-        #     return False
-        # for x, y in zip(combination, combination[1:]):
-        #     if y - x > 1:
-        #         return False
         return True
-
-    # def gen_helper(self, pos_b, neg_b):
-    #     rules = []
-    #     variables = [self.types[t] for r in chain([self.head_predicate],pos_b, neg_b) for t in r.arg_types]
-    #     body_predicates = []
-    #     for b in pos_b:
-    #         body_predicates.append(b)
-    #     for b in neg_b:
-    #         body_predicates.append(Predicate(b.index, b.arg_types, True))
-    #     for vs in product(*variables):
-    #         # make a rule with these variables
-    #         rules.append(Rule(self.head_predicate, body_predicates, vs))
-    #     return rules
-
-
-# head ("zero", [0]), body=[("succ", [0, 1], False)], variable_types=["num",..], weight=None
-
-if __name__ == '__main__':
-    head = Predicate("target", ["num"])
-    p1 = Predicate("zero", ["num"])
-    # p2 = Predicate("c", ["T"])
-    predicates = [p1]
-    # types = {"T": [1, 2], "Y": [4]}
-
-    ri = RuleIndex()
-    t = Template(head, predicates, ri)
-
-    for r in t.generate_rules(max_pos=1, max_neg=1, min_total=0, max_total=2):
-        print(r)
-
-# tf.session as sess <- argument is a config
-# one option 'allow growth' -> dynamically allocated
 
