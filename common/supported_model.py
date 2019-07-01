@@ -169,10 +169,6 @@ def gen_possible_consequences(rules, background_knowledge, example_context={}):
                 # TODO here
                 if not negated and (ground_body not in ground_index and ground_body not in intensional
                                     and body_index not in example_context and body_index not in background_knowledge):
-                    # print("invalid", rule, ground_rule, "ground_body", ground_body, "body_index", body_index)
-                    # print("ground_body not in ground_index", ground_body not in ground_index)
-                    # print("body_index not in intensional", body_index not in intensional, intensional)
-                    # print("body_index not in example_context", body_index not in example_context, example_context)
                     valid = False
                     break
                 if body_index not in background_knowledge and body_index not in example_context:
@@ -183,52 +179,3 @@ def gen_possible_consequences(rules, background_knowledge, example_context={}):
                 # rule.weight
                 possible_consequences[ground_index[ground_rule]].append((ground_rule_index, ground_bodies, body_negs))
     return ground_index, possible_consequences
-
-
-if __name__ == '__main__':
-    # Hard rule with constant weight
-    w1 = tf.constant(1.0, dtype=tf.float32)
-    r1 = Rule(head=("zero", [0]), body=[], variable_types=["num"], weight=w1)
-
-    w2 = tf.constant(0.5, dtype=tf.float32)
-    r2 = Rule(head=("succ", [0, 1]), body=[], variable_types=["num", "num"], weight=w1)
-
-    # Soft rules with trainable weight
-    w3 = tf.Variable(0.5, dtype=tf.float32)
-    r3 = Rule(head=("target", [0, 1]), body=[("succ", [1, 0], False)], variable_types=["num", "num"], weight=w1)
-
-    w4 = tf.Variable(0.5, dtype=tf.float32)
-    r4 = Rule(head=("target", [0, 1]), body=[("succ", [1, 0], False), ("target", [1, 2], False)],
-              variable_types=["num", "num", "num"], weight=w1)
-
-    # define intensional predicates
-    # assume what is known in background is fully determined
-    background_knowledge = {
-        "zero": pd.DataFrame([0]),
-        "succ": pd.DataFrame([(1, 0), (2, 1), (3, 2), (4, 3)])
-    }
-
-    types = pd.DataFrame([0, 1, 2], columns=["num"])
-    # ground soft rule -> target(0, 1) :- succ(1, 0). target(1, 2) :- succ(2, 1). ...
-    r1.gen_grounding(background_knowledge, types)
-    r2.gen_grounding(background_knowledge, types)
-    r3.gen_grounding(background_knowledge, types)
-    r4.gen_grounding(background_knowledge, types)
-
-    # release memory after grounding
-    # forward pass
-
-    # 1. give each grounding an index
-    # 2. make some trainable
-    # 3. make ragged array for each ground predicate, a list of (weight, [indexes], [negations])
-    # 4. forward pass: build graph - input ragged array and current model
-
-    print(r1.grounding)
-    print(r2.grounding)
-    print(r3.grounding)
-    print(r4.grounding)
-
-    rules = [r1, r2, r3, r4]
-    gi, pc = gen_possible_consequences(rules)
-    print(gi)
-    print(pc)

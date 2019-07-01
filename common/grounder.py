@@ -69,7 +69,7 @@ class Grounder(object):
                     counter += 1
                 cons[i] = (new_index_map[r], a, b)
 
-        for k in range(counter):#sorted(old_index_map):
+        for k in range(counter):
             non_empty_grounded_rules.append(grounded_rules[old_index_map[k]])
 
         return non_empty_grounded_rules, new_index_map

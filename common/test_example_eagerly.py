@@ -18,7 +18,6 @@ def test_one_rule_body():
     assert abs(ex.out_index(weight_indices, body, negs).numpy() - 0.311) < 1e-2
 
 
-
 def test_empty_rule_body():
     # empty bodies are handled by mapping them to "Truth"
     weights = tf.Variable([1.0], dtype=tf.float32, name='weights')

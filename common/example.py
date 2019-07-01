@@ -1,6 +1,5 @@
 import tensorflow as tf
 from tensorflow.contrib import autograph
-# tf.enable_eager_execution()
 
 
 class Example(object):
@@ -17,7 +16,7 @@ class Example(object):
                                     tf.random.uniform([shape], dtype=st.dtype, seed=0),
                                     tf.sparse.to_dense(st))
 
-        self.model = tf.Variable(initial_value=initial_value)#, constraint=lambda x: tf.clip_by_value(x, 0.0, 1.0))
+        self.model = tf.Variable(initial_value=initial_value)
 
         self.example = initial_value
         self.trainable_model = tf.cast(dense_mask, dtype=tf.float32)
@@ -41,7 +40,6 @@ class Example(object):
         rank_loss = self.model_[i] * (1 - prob_sum_rule_ranks)
 
         return rank_loss
-
 
     def ranked_loss(self, ranked_model, weights, wis, bs, ns):
         head_indices = tf.range(0, tf.size(ranked_model) - 2)
@@ -67,7 +65,7 @@ class Example(object):
         head_indices = tf.range(0, tf.size(ranked_model) - 2)
 
         losses = tf.reduce_sum(tf.map_fn(lambda i: Example.pairwise_loss(i, ranked_model, weights, wis[i], bs[i], ns[i]),
-                                         head_indices, dtype=tf.float32)) #parallel iterations = 10
+                                         head_indices, dtype=tf.float32))
 
         return losses
 
@@ -188,7 +186,7 @@ class Example(object):
         weighted_loss = self.trainable_model * unweighted_loss
         return tf.reduce_sum(tf.square(weighted_loss) +
                              tf.square(example_loss1) +
-                             tf.square(example_loss2))#0.5 * (tf.abs(weighted_loss) +
+                             tf.square(example_loss2))
 
     def softmax_reduce_prob_sum(self, vals):
         i = tf.constant(0)

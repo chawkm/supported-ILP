@@ -23,7 +23,6 @@ nums = [0,1,2,3]
 types = {"num": pd.DataFrame(nums, dtype=object)}
 
 lists = [tuple(x) for x in chain(*[permutations(nums, i) for i in range(4)])]
-print(lists)
 bk = {
     "num" : pd.DataFrame([n for n in nums], dtype=object),
     "list": pd.DataFrame([(l,) for l in lists], dtype=object),
@@ -31,10 +30,7 @@ bk = {
     "head": pd.DataFrame([(l[0], l) for l in lists if len(l) > 0], dtype=object),
     "empty": pd.DataFrame([[()]], dtype=object)
 }
-print(bk)
-# assert False
 grounder = Grounder(bk, types)
-
 
 num = Predicate("num", ["num"])
 zero = Predicate("list", ["num"])
@@ -47,13 +43,12 @@ target = Predicate("target", ["num", "num"], ts=[num, zero])
 helper = Predicate("helper", ["num", "num"], ts=[num, zero])
 
 ri = RuleIndex()
-target_t = Template(target, [head, succ, target, invented], ri, max_var=3, safe_head=True, not_identical=helper)
-invented_t = Template(helper, [head, succ, helper], ri, max_var=3, safe_head=True, not_identical=target)
+target_t = Template(target, [head, succ, target], ri, max_var=3, safe_head=True, not_identical=helper)
 
 print("template generating")
 
 t_template = time.clock()
-for template in [target_t, invented_t]:
+for template in [target_t]:
     grounder.add_rules(template.generate_rules(max_pos=3, max_neg=0, min_total=1, max_total=2))
 
 for r in grounder.grounded_rules:
@@ -90,8 +85,8 @@ with tf.Graph().as_default():
 
     """
     N clauses
-    J = len(grounder.grounded_rules) possible choices for each clause
-    Need to add 'empty' clause
+    J = len(grounder.grounded_rules) + 1 possible choices for each clause
+    Extra clause is 'empty' clause
 
     weights = N x J
 
@@ -99,7 +94,7 @@ with tf.Graph().as_default():
     """
     N_Clauses = 3
     weight_initial_value = tf.random.uniform([N_Clauses, len(grounder.grounded_rules) + 1],
-                                             seed=1)  # tf.ones([len(grounder.grounded_rules)]) * -1.0
+                                             seed=1)
 
     weights = tf.Variable(weight_initial_value, dtype=tf.float32, name='weights')
     weight_stopped = weights
@@ -118,8 +113,7 @@ with tf.Graph().as_default():
 
     same_rule_loss = 1.0 * tf.reduce_sum(tf.reduce_prod(tf.math.top_k(tf.transpose(tf.map_fn(tf.math.softmax, weights)), k=2).values, axis=1))
 
-
-    loss = support_loss + lasso_model + lasso_loss + same_rule_loss# + lasso_loss + lasso_model
+    loss = support_loss + lasso_model + lasso_loss + same_rule_loss
     loss_change = loss
 
     sig_weights = tf.map_fn(tf.sigmoid, weights, dtype=tf.float32)

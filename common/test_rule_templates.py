@@ -1,4 +1,3 @@
-import pytest
 from rule_templates import Template, Predicate, RuleIndex
 
 
